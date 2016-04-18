@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <vector>
 #include <algorithm>
+#include <stdlib.h>
 
 using std::vector;
 
@@ -36,21 +37,39 @@ class kvpair {
 
 template <typename T> 
    T pivotselect(const vector<T> &arr, int lbound, int ubound) {
-   // Selects a candidate local pivot via median-of-3
-   int mid = (lbound+ubound)/2;
-   T lkey = arr[lbound], mkey = arr[mid], ukey = arr[ubound];
+   // Selects a candidate local pivot via median-of-3, using randomly-
+   // selected entries
+   int low = rand()%(1+ubound-lbound)+lbound;
+   int mid = rand()%(1+ubound-lbound)+lbound;
+   int high = rand()%(1+ubound-lbound)+lbound;
+   //T lkey = arr[lbound], mkey = arr[mid], ukey = arr[ubound];
+   T lkey = arr[low], mkey = arr[mid], ukey = arr[high];
+
+   /*int myrank;
+   MPI_Comm_rank(MPI_COMM_WORLD,&myrank);*/
+
+   T outkey;
 
    if (lkey <= mkey) {
-      if (mkey <= ukey) return mkey;
-      return ukey;
+      if (mkey <= ukey) outkey = mkey;
+      else outkey = ukey;
+   } else {
+      if (lkey <= ukey) outkey = lkey;
+      else outkey = ukey;
    }
-   if (lkey <= ukey) return lkey;
-   return ukey;
+/*   if (!myrank) {
+      fprintf(stdout,"ps: [%d] %.2f [%d] %.2f [%d] %.2f = %f\n",lbound,double(lkey),
+            mid,double(mkey),ubound,double(ukey),double(outkey));
+   }*/
+   return outkey;
+
 }
 
 int gmedfindcount = 0;
 double medlag = 0;
-double rcvlag = 0;
+double partlag = 0;
+double mpilag = 0;
+double othlag = 0;
 double sortlag = 0;
 
 template <typename T>
@@ -71,37 +90,61 @@ template <typename T>
 
    T dummy;
 
+   /*int myrank;
+   MPI_Comm_rank(MPI_COMM_WORLD,&myrank);*/
+
    while (mptr <= hptr) {
       // All values strictly below lptr are less than the pivot,
       // all values >= lptr and strictly below mptr are equal to the pivot,
       // and all values strictly greater than hptr are greater than the pivot.
       // The values at mptr and hptr are unknown, so we work by examining mptr:
 
-      /*for (int ii = lbound; ii <= ubound; ii++) {
-         char fchar;
-         if (ii == lptr) fchar = '*';
-         else if (ii == mptr) fchar = '^';
-         else if (ii == hptr) fchar = '#';
-         else fchar = ' ';
-         fprintf(stdout,"%c%+4.2f ",fchar,double(arr[ii]));
-      } fprintf(stdout,"\n");*/
+      /*if (!myrank) {
+         for (int ii = lbound; ii <= ubound; ii++) {
+            char fchar;
+            if (ii == lptr) fchar = '*';
+            else if (ii == mptr) fchar = '^';
+            else if (ii == hptr) fchar = '#';
+            else fchar = ' ';
+            fprintf(stdout,"%c%+4.2f ",fchar,double(arr[ii]));
+         } fprintf(stdout,"\n");
+      }*/
       if (arr[mptr] < pivotval) {
          // This element belongs in the lower bucket, which expands to arr[lptr].
          // This value was previously inside the middle bucket, so it is placed
          // at arr[mptr] and we can increment both low and middle pointers
-         dummy = arr[lptr];
-         arr[lptr] = arr[mptr];
-         arr[mptr] = dummy;
+         if (lptr != mptr) {
+            dummy = arr[lptr];
+            arr[lptr] = arr[mptr];
+            arr[mptr] = dummy;
+         }
          lptr += 1; mptr += 1;
       } else if (arr[mptr] == pivotval) {
          // This element belongs in the middle bucket, so it does not need to move
          mptr += 1;
       } else { // arr[mptr] > pivotval
-         // This element belongs in the upper bucket
-         dummy = arr[hptr];
-         arr[hptr] = arr[mptr];
-         arr[mptr] = dummy;
-         hptr -= 1; // Do not change mptr, since it is not yet examined.
+         // This element belongs in the upper bucket, freeing up some room;
+         // put arr[hptr] into its proper location
+         if (pivotval > arr[hptr]) {
+            // arr[hptr] belongs in the low bucket
+            dummy = arr[hptr];
+            arr[hptr] = arr[mptr]; // put middle-pointed value in top of array
+            if (mptr != lptr) {
+               arr[mptr] = arr[lptr]; // Move first equal-pivot value to top of middle bucket
+            }
+            arr[lptr] = dummy;
+            // update stack pointers
+            mptr++; lptr++; hptr--;
+         } else if (pivotval == arr[hptr]) {
+            // arr[hptr] belongs on the top of the middle bucket
+            dummy = arr[hptr];
+            arr[hptr] = arr[mptr];
+            arr[mptr] = dummy;
+            mptr++; hptr--;
+         } else {
+            // arr[hptr] is already properly in the top bucket -- don't move
+            hptr--;
+         }
       }
    }
    // Now, we can define pivotlt and pivotle in terms of the ultimate
@@ -127,8 +170,8 @@ template <typename T>
       targetidx = (ubound + lbound + 1)/2;
    }
 
-   //int myrank;
-   //MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
+   /*int myrank;
+   MPI_Comm_rank(MPI_COMM_WORLD,&myrank);*/
 
    /*if (!myrank) {
       fprintf(stdout,"Median: lbound %d, ubound %d, idx %d\n",lbound,ubound,targetidx);
@@ -138,19 +181,33 @@ template <typename T>
 
    while (ilbound <= targetidx && iubound > targetidx) {
       T pivot = pivotselect(array, ilbound, iubound);
-      //fprintf(stdout,"Pivot is %f [%d-%d]\n",double(pivot),ilbound,iubound);
+      //if (!myrank) fprintf(stdout,"Pivot is %f [%d-%d = %d]\n",double(pivot),ilbound,iubound,1+iubound-ilbound);
 
+      /*if (!myrank) {
+         for (int ii = lbound; ii <= ubound; ii++) {
+            char mychar=' ';
+            if (ii == ilbound) mychar = '$';
+            if (ii == iubound) mychar = '#';
+            if (array[ii] == pivot) mychar = '!';
+            //fprintf(stdout,"%d: %f\n",ii,double(array[ii]));
+            fprintf(stdout,"%c%+4.2f ",mychar,double(array[ii]));
+         } 
+         fprintf(stdout,"\n");
+      }*/
       partition(array,ilbound,iubound,pivot,partlt,parteq);
-      /*for (int ii = lbound; ii <= ubound; ii++) {
-         char mychar=' ';
-         if (ii == ilbound) mychar = '$';
-         if (ii == iubound) mychar = '#';
-         if (array[ii] == pivot) mychar = '!';
-         //fprintf(stdout,"%d: %f\n",ii,double(array[ii]));
-         fprintf(stdout,"%c%+4.2f ",mychar,double(array[ii]));
-      } 
+      /*if (!myrank) {
+         for (int ii = lbound; ii <= ubound; ii++) {
+            char mychar=' ';
+            if (ii == ilbound) mychar = '$';
+            if (ii == iubound) mychar = '#';
+            if (array[ii] == pivot) mychar = '!';
+            //fprintf(stdout,"%d: %f\n",ii,double(array[ii]));
+            fprintf(stdout,"%c%+4.2f ",mychar,double(array[ii]));
+         } 
+         fprintf(stdout,"\n");
+      }*/
 
-      fprintf(stdout,"\n%d <, %d =\n",partlt,parteq);*/
+      //fprintf(stdout,"\n%d <, %d =\n",partlt,parteq);*/
 
       if (ilbound + partlt >= targetidx) {
          iubound = ilbound + partlt;
@@ -184,10 +241,11 @@ class parsorter {
          ASIZE = isize;
 
          if (nproc > 1) {
+            double now = MPI_Wtime();
             MPI_Allgather(&ASIZE,1,MPI_INT,&asizes[0],1,MPI_INT,c);
             int color = (myrank >= (nproc/2));
-            MPI_Barrier(c);
             MPI_Comm_split(c,color,myrank,&nestedcomm);
+            mpilag += MPI_Wtime()-now;
 
             nested = new parsorter(isize,nestedcomm);
          } else {
@@ -206,10 +264,11 @@ class parsorter {
          vector<kvpair> &local = *inarray;
 
          if (nproc == 1) {
+      //   {
             double now = MPI_Wtime();
             std::stable_sort(local.begin(),local.end());
             sortlag += MPI_Wtime()-now;
-            return;
+            if (nproc == 1) return;
          }
 
          if (tarray == 0) {
@@ -237,20 +296,26 @@ class parsorter {
 
          double lmedkey = 0.0; // Key of the local median
          int lvalid = 0;
+         
+         vector<double> allmedians(nproc);
+         double now;
 
-         double now = MPI_Wtime();
          for(;;) {
 
             gmedfindcount++;
-            
+           
+            now = MPI_Wtime(); 
             if (lubound >= llbound) {
-               kvpair med = median(local,llbound,lubound);
+               //kvpair med = median(local,llbound,lubound);
+               kvpair med = pivotselect(local,llbound,lubound);
                lmedkey = med.key;
                lvalid = 1;
             } else {
                lmedkey = 999999;
                lvalid = 0;
             }
+            MPI_Barrier(c);
+            medlag += MPI_Wtime()-now;
 
             /*for (int pp = 0; pp < nproc; pp++) {
                if (myrank == pp) {
@@ -263,16 +328,18 @@ class parsorter {
             }*/
 
             // Collect each of the candidate median values
-            vector<double> allmedians(nproc);
+            now = MPI_Wtime();
             MPI_Allgather(&lmedkey,1,MPI_DOUBLE,&allmedians[0],1,MPI_DOUBLE,c);
 
             // Count how many processors actually had a valid sub-array to take a median on
             int gvalid = 0;
             MPI_Allreduce(&lvalid,&gvalid,1,MPI_INT,MPI_SUM,c);
+            mpilag += MPI_Wtime()-now;
 
             // Now, we know the array contains (allvalid) good entries, with the remainder set
             // to a very high value; that means we want to find the (allvalid)/2 element
 
+            now = MPI_Wtime();
             double est_pivot = median(allmedians,0,nproc-1,gvalid/2+1);
             /*if (myrank == 0) {
                fprintf(stdout,"Candidate median (of %d) is %f\n",gvalid,est_pivot);
@@ -284,6 +351,7 @@ class parsorter {
             } else {
                literstat.lt = 0; literstat.eq = 0;
             }
+            partlag += MPI_Wtime()-now;
             /*for (int pp = 0; pp < nproc; pp++) {
                if (myrank == pp) {
                   fprintf(stdout,"%d: %d below, %d equal %d above\n",pp,literstat.lt,literstat.eq,(lubound-llbound-literstat.lt-literstat.eq+1));
@@ -296,7 +364,9 @@ class parsorter {
 
             // Accumulate the local statistics to find out how many elements
             // of the global array were less than or equal to the candidate median
+            now = MPI_Wtime();
             MPI_Allreduce(&literstat,&giterstat,2,MPI_INT,MPI_SUM,c);
+            mpilag += MPI_Wtime()-now;
 
             /*if (myrank == 0) {
                fprintf(stdout,"Global: %d below, %d equal (+%d/%d)\n",giterstat.lt,giterstat.eq,gtoosmall,gtarget);
@@ -330,13 +400,14 @@ class parsorter {
 
 
          }
-         medlag += MPI_Wtime()-now;
 
          // Now, accumulate per-processor stats on how many entries are lower than and equal to
          // the global median
 
          literstat.lt = llbound;
          iterstats procstats[nproc]; 
+
+         now = MPI_Wtime();
          MPI_Allgather(&literstat,2,MPI_INT,procstats,2,MPI_INT,c);
 
          // Number of at-median entries that are distributed with below-median entries
@@ -454,7 +525,6 @@ class parsorter {
             roffset = procstats[myrank].lt;
          }
 
-         now = MPI_Wtime();
          // Build non-blocking send/receives
          for (int pp = 0; pp < nproc; pp++) {
             if (sendto[pp] > 0) {
@@ -477,11 +547,11 @@ class parsorter {
          for (int kk = 0; kk < rnum; kk++) areqs[snum+kk] = recreqs[kk];
 
          MPI_Waitall(snum+rnum,areqs,astats);
-         rcvlag += MPI_Wtime()-now;
+         mpilag += MPI_Wtime()-now;
 
-         //now = MPI_Wtime();
+         now = MPI_Wtime();
          local = tmp;
-         //sortlag += MPI_Wtime()-now;
+         othlag += MPI_Wtime()-now;
 
          nested->sortkvpairs(&local,&tmp);
 
@@ -517,16 +587,23 @@ int main(int argc, char ** argv) {
 
    // Initialize random variable
    rnd.seed(myrank);
+   srand(myrank);
 
+   double overall;
+   for (int loop = 1; loop < 10; loop++) {
    // Initialize array (keys only)
    for (int ii = 0; ii < ASIZE; ii++) {
       local[ii].key = rnd.random();
       local[ii].value = myrank+0.001*ii;
    }
 
+   double now = MPI_Wtime();
    parsorter sortme(ASIZE,MPI_COMM_WORLD);
 
    sortme.sortkvpairs(&local);
+   overall += MPI_Wtime()-now;
+   MPI_Barrier(MPI_COMM_WORLD);
+   }
 
 
    //std::sort(lpart.begin(),lpart.end());
@@ -534,7 +611,7 @@ int main(int argc, char ** argv) {
    // Print array
    for (int pp = 0; pp < nproc; pp++) {
       if (myrank == pp) {
-         fprintf(stdout,"--%d [%d, %d, %f, %f, %f]--\n",myrank,ASIZE,gmedfindcount,medlag,rcvlag,sortlag);
+         fprintf(stdout,"--%-2d [%d, %d, %-8.3g + %-8.3g + %-8.3g + %-8.3g + %-8.3g = %-8.3g]--\n",myrank,ASIZE,gmedfindcount,medlag,partlag,mpilag,sortlag,othlag,overall);
          /*for (int kk = 0; kk < ASIZE; kk++) {
             fprintf(stdout,"%+.3f ",double(local[kk]));
          }*/
