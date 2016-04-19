@@ -54,7 +54,7 @@ namespace Sorter {
 
 // Outside the namespace
 
-void sortarray(TArrayn::DTArray const &keys, TArrayn::DTArray const &values, 
+void sortarray(blitz::Array<double,3> const &keys, blitz::Array<double,3> const &values, 
                blitz::Array<double,3> & sortkeys,
                blitz::Array<double,3> & sortvals,
                MPI_Comm c = MPI_COMM_WORLD);

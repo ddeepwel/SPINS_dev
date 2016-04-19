@@ -348,11 +348,10 @@ namespace Sorter {
 
 // Outside of namespace
 
-using TArrayn::DTArray;
 using blitz::Array;
 using namespace Sorter;
 
-void sortarray(DTArray const &keys, DTArray const &vals,
+void sortarray(Array<double,3> const &keys, Array<double,3> const &vals,
                Array<double,3> & sortkeys, Array<double,3> & sortvals,
                MPI_Comm c) {
    /* Interface to sorting: take input 3D key/value arrays, sort them,
