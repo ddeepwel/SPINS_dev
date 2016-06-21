@@ -301,6 +301,12 @@ class userControl : public BaseCase {
                   fprintf(stdout,"Reading w from %s\n",
                      w_filename.c_str());
                read_array(w,w_filename.c_str(),Nx,Ny,Nz);
+               // Write out .m readers, since they may not have been generated previously
+               write_reader(u,"u",true);
+               if (Ny > 1 || rot_f != 0) {
+                  write_reader(v,"v",true);
+               }
+               write_reader(w,"w",true);
                break;
          }
 
