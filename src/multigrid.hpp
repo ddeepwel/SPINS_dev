@@ -195,6 +195,20 @@ class MG_Solver {
       void _cycle(CYCLE_TYPE cycle, blitz::Array<double,2> & f, blitz::Array<double,2> & u,
             double bonus_in, double & bonus_out,int pre, int mid, int post);
 
+      /* Rebalances an array; an array that is orignally spit in orig is
+         reassigned to balance, such that the global (compressed) array
+         is exactly the same */
+      // Arrays to hold origin, destination bounds for array rebalancing (coarse)
+      enum BalanceGroup {
+         FFine = 0, UFine = 1, FCoarse = 2, UCoarse = 3
+      };
+      int *to_lbounds[4], *to_ubounds[4], *tb_lbounds[4], *tb_ubounds[4];
+      bool rebalance_setup[4];
+      void rebalance_array(blitz::Array<double,2> & orig,
+            blitz::Array<double,2> & balance, MPI_Comm c, BalanceGroup btype);
+      void rebalance_line(blitz::Array<double,1> & o,
+            blitz::Array<double,1> & b, MPI_Comm c, BalanceGroup btype);
+
       MPI_Comm my_comm;
       MPI_Comm coarse_comm; // Communicator for coarse grid
       MG_Solver * coarse_solver; // Coarse solver
@@ -215,13 +229,6 @@ void get_fd_operator(blitz::Array<double,1> & x, blitz::Array<double,2> & Dx,
     RBRB-RBRB-RBRB-RBRBR-BRBRB -- the latter will involve a double-stall on 
                                   processor 4 for boundary data */
 void get_local_split(int extent, int rank, int nproc, int & l_lbound, int & l_ubound);
-
-/* Rebalances an array; an array that is orignally spit in orig is
-   reassigned to balance, such that the global (compressed) array 
-   is exactly the same */
-void rebalance_array(blitz::Array<double,2> & orig, 
-      blitz::Array<double,2> & balance, MPI_Comm c);
-void rebalance_line(blitz::Array<double,1> & o, blitz::Array<double,1> & b, MPI_Comm c);
 
 /* Perform a line solve, which is the 1d problem:
    A(z)*u_zz + B(z)*u_z + C(z) = f(z), with

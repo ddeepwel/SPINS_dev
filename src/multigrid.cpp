@@ -139,7 +139,7 @@ void get_local_split(int extent, int rank, int nproc, int & l_lbound, int & l_ub
 #define MIN(x,y) ((x)<(y) ? (x) : (y))
 #define MAX(x,y) ((x)<(y) ? (y) : (x))
       
-void rebalance_line(Array<double,1> & orig, Array<double,1> & balance, MPI_Comm c) {
+void MG_Solver::rebalance_line(Array<double,1> & orig, Array<double,1> & balance, MPI_Comm c, BalanceGroup btype) {
    TinyVector<int,2> o_base, o_extent;
    o_base(0) = orig.lbound(firstDim); o_extent(0) = orig.extent(firstDim);
    o_base(1) = 0; o_extent(1) = 1;
@@ -151,10 +151,10 @@ void rebalance_line(Array<double,1> & orig, Array<double,1> & balance, MPI_Comm 
 //   Array<double,2> b_2d(Range(balance.lbound(firstDim),balance.ubound(firstDim)),Range(0,0));
    Array<double,2> b_2d(b_base,b_extent);
    o_2d(Range::all(),0) = orig;
-   rebalance_array(o_2d,b_2d,c);
+   rebalance_array(o_2d,b_2d,c,btype);
    if (balance.extent(firstDim) > 0) balance = b_2d(Range::all(),0);
 }
-void rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm c) {
+void MG_Solver::rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm c, BalanceGroup btype) {
    int o_lbound = orig.lbound(firstDim);
    int o_ubound = orig.ubound(firstDim);
    int b_lbound = balance.lbound(firstDim);
@@ -182,17 +182,25 @@ void rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm
       
    MPI_Comm_size(c,&nproc);
    MPI_Comm_rank(c,&myrank);
-//   fprintf(stdout,"Rebalancing array, %d/%d\n",myrank,nproc);
+   //fprintf(stderr,"Rebalancing array, %d/%d\n",myrank+1,nproc);
    /* Construct a view of the array bounds shared by all processors */
-   int o_lbounds[nproc], o_ubounds[nproc], b_lbounds[nproc], b_ubounds[nproc];
-   MPI_Allgather(&o_lbound,1,MPI_INT,o_lbounds,1,MPI_INT,c);
-   MPI_Allgather(&o_ubound,1,MPI_INT,o_ubounds,1,MPI_INT,c);
-   MPI_Allgather(&b_lbound,1,MPI_INT,b_lbounds,1,MPI_INT,c);
-   MPI_Allgather(&b_ubound,1,MPI_INT,b_ubounds,1,MPI_INT,c);
-//   fprintf(stdout,"Rebalancng array with global dimensions %d-%d\n",o_lbounds[0],o_ubounds[nproc-1]);
+   int *o_lbounds, *o_ubounds, *b_lbounds, *b_ubounds;
+   if (!rebalance_setup[btype]) {
+      MPI_Allgather(&o_lbound,1,MPI_INT,to_lbounds[btype],1,MPI_INT,c);
+      MPI_Allgather(&o_ubound,1,MPI_INT,to_ubounds[btype],1,MPI_INT,c);
+      MPI_Allgather(&b_lbound,1,MPI_INT,tb_lbounds[btype],1,MPI_INT,c);
+      MPI_Allgather(&b_ubound,1,MPI_INT,tb_ubounds[btype],1,MPI_INT,c);
+      rebalance_setup[btype] = true;
+   }
+   o_lbounds = to_lbounds[btype];
+   o_ubounds = to_ubounds[btype];
+   b_lbounds = tb_lbounds[btype];
+   b_ubounds = tb_ubounds[btype];
+   //fprintf(stderr,"Rebalancng array with global dimensions %d-%d\n",o_lbounds[0],o_ubounds[nproc-1]);
 
    /* Now, construct the mapping of counts and displacements by processor */
    int s_counts[nproc], s_displs[nproc], r_counts[nproc], r_displs[nproc];
+   int s_total = 0, r_total = 0;
    for (int k = 0; k < nproc; k++) {
       /* If our orig array overlaps their balance array... */
       if (o_lbound <= b_ubounds[k] && o_ubound >= b_lbounds[k]) {
@@ -208,6 +216,7 @@ void rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm
          int send_ub = MIN(o_ubound,b_ubounds[k]);
          s_counts[k] = size_z*(1+send_ub-send_lb);
          s_displs[k] = (send_lb-o_lbound)*size_z;
+         s_total += s_counts[k];
       } else {
          s_counts[k] = s_displs[k] = 0;
       }
@@ -217,6 +226,7 @@ void rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm
          int rec_ub = MIN(b_ubound,o_ubounds[k]);
          r_counts[k] = size_z*(1+rec_ub-rec_lb);
          r_displs[k] = (rec_lb-b_lbound)*size_z;
+         r_total += r_counts[k];
       } else {
          r_counts[k] = r_displs[k] = 0;
       }
@@ -230,11 +240,13 @@ void rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm
          for (int k = 0; k < nproc; k++) {
             fprintf(stderr,"%d/%d ",s_counts[k],r_counts[k]);
          }
-         fprintf(stderr,"\n");
+         fprintf(stderr," -- %d+%d // %d+%d\n",orig.size(),s_total,balance.size(),r_total);
       }
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(c);
    }
 #endif
+
+   assert(orig.size() == s_total && balance.size() == r_total);
    
    MPI_Alltoallv(orig_data,s_counts,s_displs,MPI_DOUBLE,
          balance.data(),r_counts,r_displs,MPI_DOUBLE,c);
@@ -304,6 +316,15 @@ MG_Solver::MG_Solver(Array<double,1> xvals, blitz::Array<double,1> zvals,
 
    /* Dz/Dzz don't have any local/global pairing */
    Dz.resize(size_z,3); Dzz.resize(size_z,3);
+
+   // And arrays for rebalancing
+   for (int i = 0; i < 4; i++) {
+      to_lbounds[i] = new int[nproc];
+      to_ubounds[i] = new int[nproc];
+      tb_lbounds[i] = new int[nproc];
+      tb_ubounds[i] = new int[nproc];
+      rebalance_setup[i] = false;
+   }
 
    /* Compute global Dx/Dxx operators */
    Array<double,2> global_Dx(Range(xvals.lbound(firstDim),xvals.ubound(firstDim)),Range(0,2));
@@ -569,12 +590,12 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
 void MG_Solver::problem_setup(Array<double,2> & Uxx, Array<double,2> & Uzz,
       Array<double,2> & Uxz, Array<double,2> & Ux, Array<double,2> & Uz) {
    coarse_numeric_ok = false;
-   rebalance_array(Uxx,uxx,my_comm);
-   rebalance_array(Uzz,uzz,my_comm);
-   rebalance_array(Ux,ux,my_comm);
-   rebalance_array(Uz,uz,my_comm);
+   rebalance_array(Uxx,uxx,my_comm,FFine); // uxx/etc are sized as per the local, internal grid;
+   rebalance_array(Uzz,uzz,my_comm,FFine); // from an array-size point of view this looks
+   rebalance_array(Ux,ux,my_comm,FFine);   // equivalent to the balancing of input-f
+   rebalance_array(Uz,uz,my_comm,FFine);
 //   SYNC(cerr << Uxz; cerr.flush());
-   rebalance_array(Uxz,uxz,my_comm);
+   rebalance_array(Uxz,uxz,my_comm,FFine);
 //   SYNC(cerr << uxz; cerr.flush());
 //   MPI_Finalize(); exit(1);
    /* Do coarsening */
@@ -604,11 +625,11 @@ void MG_Solver::problem_setup(Array<double,2> & Uxx, Array<double,2> & Uzz,
 //   fprintf(stdout,"Coarsening Uxx, size %dx%d\n",Uxx.extent(firstDim),Uxx.extent(secondDim));
    coarsen_grid(uxx,true); 
 //   fprintf(stdout,"Rebalancing coarsened Uxx\n");
-   rebalance_array(local_coarse_2d,CUxx,my_comm);
-   coarsen_grid(uxz,true); rebalance_array(local_coarse_2d,CUxz,my_comm);
-   coarsen_grid(uzz,true); rebalance_array(local_coarse_2d,CUzz,my_comm);
-   coarsen_grid(ux,true); rebalance_array(local_coarse_2d,CUx,my_comm);
-   coarsen_grid(uz,true); rebalance_array(local_coarse_2d,CUz,my_comm);
+   rebalance_array(local_coarse_2d,CUxx,my_comm,FCoarse);
+   coarsen_grid(uxz,true); rebalance_array(local_coarse_2d,CUxz,my_comm,FCoarse);
+   coarsen_grid(uzz,true); rebalance_array(local_coarse_2d,CUzz,my_comm,FCoarse);
+   coarsen_grid(ux,true); rebalance_array(local_coarse_2d,CUx,my_comm,FCoarse);
+   coarsen_grid(uz,true); rebalance_array(local_coarse_2d,CUz,my_comm,FCoarse);
    if (coarse_solver)
       coarse_solver->problem_setup(CUxx,CUzz,CUxz,CUx,CUz);
 }
@@ -650,7 +671,7 @@ void MG_Solver::bc_setup(int dim, Array<double,1> u_min, Array<double,1> uz_min,
       bc_incoming(Range::all(),3) = uz_max;
       bc_incoming(Range::all(),4) = ux_min;
       bc_incoming(Range::all(),5) = ux_max;
-      rebalance_array(bc_incoming,bc_here,my_comm);
+      rebalance_array(bc_incoming,bc_here,my_comm,FFine);
       u_bot = bc_here(Range::all(),0);
       u_top = bc_here(Range::all(),1);
       uz_bot = bc_here(Range::all(),2);
@@ -675,12 +696,12 @@ void MG_Solver::bc_setup(int dim, Array<double,1> u_min, Array<double,1> uz_min,
       cu_max.resize(c_size); cu_max.reindexSelf(c_base);
       cux_max.resize(c_size); cux_max.reindexSelf(c_base);
       cuz_max.resize(c_size); cuz_max.reindexSelf(c_base);
-      coarsen_line(u_bot); rebalance_line(local_coarse_1d,cu_min,my_comm);
-      coarsen_line(u_top); rebalance_line(local_coarse_1d,cu_max,my_comm);
-      coarsen_line(ux_bot); rebalance_line(local_coarse_1d,cux_min,my_comm);
-      coarsen_line(ux_top); rebalance_line(local_coarse_1d,cux_max,my_comm);
-      coarsen_line(uz_bot); rebalance_line(local_coarse_1d,cuz_min,my_comm);
-      coarsen_line(uz_top); rebalance_line(local_coarse_1d,cuz_max,my_comm);
+      coarsen_line(u_bot); rebalance_line(local_coarse_1d,cu_min,my_comm,FCoarse);
+      coarsen_line(u_top); rebalance_line(local_coarse_1d,cu_max,my_comm,FCoarse);
+      coarsen_line(ux_bot); rebalance_line(local_coarse_1d,cux_min,my_comm,FCoarse);
+      coarsen_line(ux_top); rebalance_line(local_coarse_1d,cux_max,my_comm,FCoarse);
+      coarsen_line(uz_bot); rebalance_line(local_coarse_1d,cuz_min,my_comm,FCoarse);
+      coarsen_line(uz_top); rebalance_line(local_coarse_1d,cuz_max,my_comm,FCoarse);
       if (coarse_solver) 
          coarse_solver->bc_setup(dim,cu_min,cuz_min,cux_min,cu_max,cuz_max,cux_max);
          
@@ -1742,11 +1763,11 @@ void MG_Solver::cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & u
       abort();
    }
 
-   rebalance_array(f,f_balance,my_comm);
+   rebalance_array(f,f_balance,my_comm,FFine);
 
    _cycle(cycle,f_balance,u_balance,extra_in,extra_out,pre,mid,post);
 
-   rebalance_array(u_balance,u,my_comm);
+   rebalance_array(u_balance,u,my_comm,UFine);
    // Extra_out is only valid on the first processor
    MPI_Bcast(&extra_out,1,MPI_DOUBLE,0,my_comm);
    return;
@@ -1759,9 +1780,11 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    /* This allocation should be made only once. FIXME. */
    Array<double,2> defect(f.lbound(),f.extent()), correction(u.lbound(),u.extent());
    //fprintf(stderr,"_cycle: mean condition %g\n",extra_in);
+//   if (master()) fprintf(stderr,"Call to _cycle[%d]\n",size_x);
    if (coarsest_level) {
       // Coarse-grid solve
       if (myrank != 0) return;
+//      fprintf(stderr,"Coarse-grid solve\n");
       if (!symbolic_factor || !numeric_factor ||
             !coarse_symbolic_ok || !coarse_numeric_ok) {
 //         fprintf(stderr,"Building coarse operator\n");
@@ -1843,7 +1866,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    /* Need arrays for defect and correction */
 
    /* Perform one red-black relaxtion pass */
-   //fprintf(stderr,"Pre-cyle one\n");
+//   if (master()) fprintf(stderr,"Pre-cyle one\n");
    if (pre >= 1) {
       do_redblack(f,correction);
    //cout << "New correction: " << correction;
@@ -1893,44 +1916,53 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    /* Now, coarse-grid solve */
    switch (cycle) {
       case CYCLE_V:
-//         if (master()) fprintf(stderr,"V[%d] local full defect\n",size_x);
+//         if (master()) fprintf(stderr,"V[%d] cycle begin \n",size_x);
 //         SYNC(cerr << defect);
          coarsen_grid(defect);
-         rebalance_array(local_coarse_2d,coarse_f,my_comm);
-//         if (master()) fprintf(stderr,"V[%d] local coarse defect\n",size_x);
+         rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
+         //if (master()) fprintf(stderr,"V[%d] local coarse defect\n",size_x);
 //         SYNC(cerr << coarse_f);
          if (coarse_solver) {
-//            fprintf(stderr,"Coarse solve\n");
+//            if (master()) fprintf(stderr,"Recursive(V) solve\n");
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   coarse_extra_in,coarse_extra_out,pre,mid,post);
-//            fprintf(stderr,"Coarse solve finished\n");
+//            if (master()) fprintf(stderr,"Recursive(V) solve finished\n");
          } else {
-//            fprintf(stderr,"No coarse solve\n");
+            //fprintf(stderr,"No coarse solve\n");
          }
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
 //         if (master()) fprintf(stderr,"V[%d] local coarse correction\n",size_x);
 //         SYNC(cerr << coarse_u);
-         rebalance_array(coarse_u,local_coarse_2d,my_comm);
+         rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
          apply_operator(correction,f);
          defect = defect-f-coarse_extra_out;
          u = u+correction;
          extra_out = coarse_extra_out;
+//         if (master()) fprintf(stderr,"V[%d] cycle return \n",size_x);
          break;
       case CYCLE_F:
+//         if (master()) fprintf(stderr,"F[%d] cycle begin\n",size_x);
          coarsen_grid(defect);
-         rebalance_array(local_coarse_2d,coarse_f,my_comm);
+//         if (master()) {
+//            fprintf(stderr,"lc2d: %d - %d\n",local_coarse_2d.lbound(firstDim),local_coarse_2d.ubound(firstDim));
+//            fprintf(stderr,"coarsef: %d - %d\n",coarse_f.lbound(firstDim),coarse_f.ubound(firstDim));
+//         }
+         rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
-//            fprintf(stderr,"Coarse solve\n");
+//            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve begin\n",size_x);
             coarse_solver->_cycle(CYCLE_F,coarse_f,coarse_u,
                   extra_in,coarse_extra_out,pre,mid,post);
-//            fprintf(stderr,"Coarse solve finished\n");
+//            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve end\n",size_x);
          } else {
 //            fprintf(stderr,"No coarse solve\n");
          }
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
-         rebalance_array(coarse_u,local_coarse_2d,my_comm);
+//         if (master()) {
+//            fprintf(stderr,"coarseu: %d - %d\n",coarse_u.lbound(firstDim),coarse_u.ubound(firstDim));
+//         }
+         rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
          apply_operator(correction,f);
@@ -1940,6 +1972,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
 //         fprintf(stderr,"F(1)[%d] average: %g vs %g\n",size_x,pvsum(u,my_comm)/(size_x*size_z),extra_in);
          extra_out = coarse_extra_out;
          /* Now, two more relaxation steps */
+//         if (master()) fprintf(stderr,"F[%d] mid-cycle corrections\n",size_x);
          for (int i = 0; i < mid; i++) {
             do_redblack(defect,correction);
       //      cout << "New correction: " << correction;
@@ -1954,20 +1987,23 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
 //            coarse_extra_in = extra_in - avg;
 //         }
          coarsen_grid(defect);
-         rebalance_array(local_coarse_2d,coarse_f,my_comm);
+         rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
+//            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve begin\n",size_x);
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   0,coarse_extra_out,pre,mid,post);
+//            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve end\n",size_x);
          } else {
          }
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
-         rebalance_array(coarse_u,local_coarse_2d,my_comm);
+         rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
          apply_operator(correction,f);
          defect = defect-f-coarse_extra_out;
          u = u+correction;
 //         fprintf(stderr,"F(2)[%d] average: %g vs %g\n",size_x,pvsum(u,my_comm)/(size_x*size_z),extra_in);
          extra_out += coarse_extra_out;
+//         if (master()) fprintf(stderr,"F[%d] cycle return\n",size_x);
          break;
 
       case CYCLE_NONE:
