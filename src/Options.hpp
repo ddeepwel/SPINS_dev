@@ -44,6 +44,13 @@ void add_option(
       const char * name, string * location,
       const char * def_value, const char * description);
 
+// Overload for vector list (no default value)
+template <class t> void add_option(
+      const char * name, std::vector<t> * location, const char * description) {
+   categories.back()->add_options()
+      (name,popt::value< std::vector<t> >(location)->multitoken(),description);
+}
+
 // Wrapper for adding a "switch" option that is either present (true) or
 // not present (false).
 void add_switch(const char * name, bool * location, const char * description);
