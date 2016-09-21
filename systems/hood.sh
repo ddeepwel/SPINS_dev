@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# System-specific settings for hungabee.westgrid.ca
+# System-specific settings for hood.math
 
 CC=icc
 CXX=icpc
-LD=mpicc
+LD=icpc
 
 # System-specific compiler flags
 SYSTEM_CFLAGS=
@@ -26,11 +26,11 @@ EXTRA_OPTIM_LDFLAGS=$EXTRA_OPTIM_CFLAGS
 # Library names/locations/flags for MPI-compilation.  This will
 # probably not be necessary on systems with a working mpicc
 # alias
-MPICXX=mpicc
+MPICXX=icpc
 MPI_CFLAGS=
-MPI_LIB=
-MPI_LIBDIR=
-MPI_INCDIR=
+MPI_LIBDIR="-L${MPI_LIB}"
+MPI_LIB="-lmpi"
+MPI_INCDIR="-I${MPI_INCLUDE}"
 
 # Library names/locations for LAPACK
 LAPACK_LIB="-lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread"
