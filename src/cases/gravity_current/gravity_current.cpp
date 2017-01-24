@@ -4,9 +4,9 @@
 /* ------------------ Top matter --------------------- */
 
 // Required headers
-#include "../BaseCase.hpp"      // Support file containing default implementations of several functions
-#include "../Options.hpp"       // config-file parser
-#include "../Science.hpp"       // Science content
+#include "../../BaseCase.hpp"      // Support file containing default implementations of several functions
+#include "../../Options.hpp"       // config-file parser
+#include "../../Science.hpp"       // Science content
 #include <random/normal.h>      // Blitz random number generator
 #include <fstream>
 
