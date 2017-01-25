@@ -344,7 +344,7 @@ void BaseCase::check_and_dump(double clock_time, double real_start_time,
             FILE * dump_file; 
             dump_file = fopen("dump_time.txt","w");
             assert(dump_file);
-            fprintf(dump_file,"The dump time was:\n%.12g\n", sim_time);
+            fprintf(dump_file,"The dump time was:\n%.16g\n", sim_time);
             fprintf(dump_file,"The dump index was:\n%d\n", plot_number);
             fclose(dump_file);
         }
