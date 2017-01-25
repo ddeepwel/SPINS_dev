@@ -189,3 +189,41 @@ void add_option(
    add_option<string>(name, location, string(def_value), description);
 }
 
+// adjust temporal values when restarting from dump
+void adjust_for_dump(bool & restarting, double & restart_time, int & restart_sequence,
+        const double final_time, const double compute_time, double & avg_write_time,
+        const int Num_tracers, const int Nx, const int Ny, const int Nz) {
+    restarting = true;  // change restart to true
+    // open dump time file
+    string dump_str;
+    ifstream dump_file;
+    dump_file.open("dump_time.txt");
+
+    // ingnore 1st line
+    getline(dump_file, dump_str); 
+    // get restart time from 2nd line
+    getline(dump_file, dump_str);
+    restart_time = atof(dump_str.c_str());
+    // ingore 3rd line
+    getline(dump_file, dump_str);
+    // get restart sequence from 4th line
+    getline(dump_file, dump_str);
+    restart_sequence = atoi(dump_str.c_str());
+
+    if (restart_time > final_time) {
+        // Die, ungracefully
+        if (master()) {
+            fprintf(stderr,"Restart dump time (%.4g) is past final time (%.4g). "
+                    "Quitting now.\n",restart_time,final_time);
+        }
+        MPI_Finalize(); exit(1);
+    }
+
+    // make an estimate of the average write time
+    // this will get overwritten once a write occurs
+    if (compute_time > 0) {
+        double write_time_per_G = 25.0;     // (s) 1 G = 512^3 points
+        int Num_fields = 3 + Num_tracers;   // 3 velocity fields + tracers
+        avg_write_time = max(write_time_per_G*Num_fields*Nx*Ny*Nz/pow(512.0,3), 20.0);
+    }
+}

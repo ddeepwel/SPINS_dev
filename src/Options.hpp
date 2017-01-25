@@ -62,4 +62,9 @@ void options_init();
 // Run the options parser, using the passed-in argc/argv from
 // main().  This also opens and reads in the configuration file.
 void options_parse(int argc, char ** argv);
+
+// adjust temporal values when restarting from dump
+void adjust_for_dump(bool & restarting, double & restart_time, int & restart_sequence,
+        const double final_time, const double compute_time, double & avg_write_time,
+        const int Num_tracers, const int Nx, const int Ny, const int Nz);
 #endif
