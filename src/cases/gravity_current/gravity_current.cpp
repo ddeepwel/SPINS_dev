@@ -396,6 +396,11 @@ int main(int argc, char ** argv) {
     option_category("Other options");
     add_option("perturb",&perturb,"Initial perturbation in velocity");
 
+    option_category("Filter options");
+    add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
+    add_option("f_order",&f_order,2.0,"Filter order");
+    add_option("f_strength",&f_strength,20.0,"Filter strength");
+
     // Parse the options from the command line and config file
     options_parse(argc,argv);
 
@@ -459,6 +464,7 @@ int main(int argc, char ** argv) {
         fprintf(stdout,"g = %f, rot_f = %f, rho_0 = %f\n",g,rot_f,rho_0);
         fprintf(stdout,"Time between plots: %g s\n",plot_interval);
         fprintf(stdout,"Initial velocity perturbation: %g\n",perturb);
+        fprintf(stdout,"Filter cutoff = %f, order = %f, strength = %f\n",f_cutoff,f_order,f_strength);
         fprintf(stdout,"Buoyancy frequency squared %g\n",N2_max);
     }
 
