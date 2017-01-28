@@ -286,7 +286,7 @@ class userControl : public BaseCase {
                 next_plot = next_plot + plot_interval;
 
                 // Find average time to write (for dump)
-                clock_time = MPI_Wtime(); // time just afer write
+                clock_time = MPI_Wtime(); // time just after write
                 avg_write_time = (avg_write_time*(plot_number-restart_sequence-1) 
                         + (clock_time - comp_duration))/(plot_number-restart_sequence);
                 // Print information about plot outputs
@@ -409,38 +409,8 @@ int main(int argc, char ** argv) {
                 final_time, compute_time, avg_write_time, Num_tracers, Nx, Ny, Nz);
     }
 
-    // Grid types:
-    if (xgrid_type == "FOURIER") {
-        intype_x = PERIODIC;
-    } else if (xgrid_type == "FREE_SLIP") {
-        intype_x = FREE_SLIP;
-    } else if (xgrid_type == "NO_SLIP") {
-        intype_x = NO_SLIP;
-    } else {
-        if (master())
-            fprintf(stderr,"Invalid option %s received for type_x\n",xgrid_type.c_str());
-        MPI_Finalize(); exit(1);
-    }
-    if (ygrid_type == "FOURIER") {
-        intype_y = PERIODIC;
-    } else if (ygrid_type == "FREE_SLIP") {
-        intype_y = FREE_SLIP;
-    } else {
-        if (master())
-            fprintf(stderr,"Invalid option %s received for type_y\n",ygrid_type.c_str());
-        MPI_Finalize(); exit(1);
-    }
-    if (zgrid_type == "FOURIER") {
-        intype_z = PERIODIC;
-    } else if (zgrid_type == "FREE_SLIP") {
-        intype_z = FREE_SLIP;
-    } else if (zgrid_type == "NO_SLIP") {
-        intype_z = NO_SLIP;
-    } else {
-        if (master())
-            fprintf(stderr,"Invalid option %s received for type_z\n",zgrid_type.c_str());
-        MPI_Finalize(); exit(1);
-    }
+    // parse expansion types
+    parse_boundary_conditions(xgrid_type, ygrid_type, zgrid_type, intype_x, intype_y, intype_z);
 
     // adjust Ly for 2D
     if (Ny==1 and Ly!=1.0) {

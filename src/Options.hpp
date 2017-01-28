@@ -5,6 +5,9 @@
 #define OPTIONS_HPP
 
 #include <vector> // Vector
+#include "NSIntegrator.hpp" // For Dim types
+
+using namespace NSIntegrator;
 
 // Include boost program options library
 #include <boost/program_options.hpp> 
@@ -67,4 +70,7 @@ void options_parse(int argc, char ** argv);
 void adjust_for_dump(bool & restarting, double & restart_time, int & restart_sequence,
         const double final_time, const double compute_time, double & avg_write_time,
         const int Num_tracers, const int Nx, const int Ny, const int Nz);
+// parse expansion types
+void parse_boundary_conditions(const string xgrid_type, const string ygrid_type,
+        const string zgrid_type, DIMTYPE & intype_x, DIMTYPE & intype_y, DIMTYPE & intype_z);
 #endif
