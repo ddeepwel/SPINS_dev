@@ -163,6 +163,10 @@ class BaseCase {
               Array<double,1> *xx=0, Array<double,1> *yy=0, Array<double,1> *zz=0);
 };
 
+// parse expansion types
+void parse_boundary_conditions(const string xgrid_type, const string ygrid_type,
+        const string zgrid_type, DIMTYPE & intype_x, DIMTYPE & intype_y, DIMTYPE & intype_z);
+
 extern template class FluidEvolve<BaseCase>;
 typedef FluidEvolve<BaseCase> EasyFlow; // Explicit template instantiation
 #endif
