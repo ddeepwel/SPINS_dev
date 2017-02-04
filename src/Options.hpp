@@ -67,4 +67,7 @@ void options_parse(int argc, char ** argv);
 void adjust_for_dump(bool & restarting, double & restart_time, int & restart_sequence,
         const double final_time, const double compute_time, double & avg_write_time,
         const int Num_tracers, const int Nx, const int Ny, const int Nz);
+
+void check_restart_sequence(const bool restarting, int & restart_sequence,
+        double & initial_time, const double plot_interval);
 #endif

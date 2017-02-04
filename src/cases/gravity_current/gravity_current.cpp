@@ -415,6 +415,9 @@ int main(int argc, char ** argv) {
                 final_time, compute_time, avg_write_time, Num_tracers, Nx, Ny, Nz);
     }
 
+    // check restart sequence
+    check_restart_sequence(restarting, restart_sequence, initial_time, plot_interval);
+
     // parse expansion types
     parse_boundary_conditions(xgrid_type, ygrid_type, zgrid_type, intype_x, intype_y, intype_z);
 
@@ -424,30 +427,6 @@ int main(int argc, char ** argv) {
         if (master())
             fprintf(stdout,"Simulation is 2 dimensional, "
                     "Ly has been changed to 1.0 for normalization.\n");
-    }
-
-    /* ------------------ Set correct initial time, and sequence --------------------- */
-
-    if (restarting) {
-        if (restart_sequence <= 0) {
-            restart_sequence = int(initial_time/plot_interval);
-        }
-        if (master()) {
-            fprintf(stdout,"Restart flags detected\n");
-            fprintf(stdout,"Restarting from time %g, at sequence number %d\n",
-                    initial_time,restart_sequence);
-        }
-    } else {
-        // Not restarting, so set the initial sequence number
-        // to the initial time / plot_interval
-        restart_sequence = int(initial_time/plot_interval);
-        if (fmod(initial_time,plot_interval) != 0.0) {
-            if (master()) {
-                fprintf(stdout,"Warning: the initial time (%g) does not appear "
-                        "to be an even multiple of the plot interval (%g)\n",
-                        initial_time,plot_interval);
-            }
-        }
     }
 
     /* ------------------ Derived parameters --------------------- */

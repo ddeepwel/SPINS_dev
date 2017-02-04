@@ -227,3 +227,29 @@ void adjust_for_dump(bool & restarting, double & restart_time, int & restart_seq
         avg_write_time = max(write_time_per_G*Num_fields*Nx*Ny*Nz/pow(512.0,3), 20.0);
     }
 }
+
+// check restart sequence
+void check_restart_sequence(const bool restarting, int & restart_sequence,
+        double & initial_time, const double plot_interval) {
+    if (restarting) {
+        if (restart_sequence <= 0) {
+            restart_sequence = int(initial_time/plot_interval);
+        }
+        if (master()) {
+            fprintf(stdout,"Restart flags detected\n");
+            fprintf(stdout,"Restarting from time %g, at sequence number %d\n",
+                    initial_time,restart_sequence);
+        }
+    } else {
+        // Not restarting, so set the initial sequence number
+        // to the initial time / plot_interval
+        restart_sequence = int(initial_time/plot_interval);
+        if (fmod(initial_time,plot_interval) != 0.0) {
+            if (master()) {
+                fprintf(stdout,"Warning: the initial time (%g) does not appear "
+                        "to be an even multiple of the plot interval (%g)\n",
+                        initial_time,plot_interval);
+            }
+        }
+    }
+}
