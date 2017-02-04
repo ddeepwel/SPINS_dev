@@ -102,6 +102,7 @@ class userControl : public BaseCase {
 
         // Temporal parameters
         double init_time() const { return initial_time; }
+        int get_restart_sequence() const { return restart_sequence; }
 
         // Number of tracers (the first is density)
         int numtracers() const { return Num_tracers; }
