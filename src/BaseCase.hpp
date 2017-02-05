@@ -81,6 +81,8 @@ class BaseCase {
       virtual double get_diffusivity(int tracernum) const; // Diffusivity
       virtual double get_rot_f() const; // Physical rotation rate
       virtual int get_restart_sequence() const; // restart sequence
+      virtual double get_dt_max() const; // maximum time step
+      virtual double get_next_plot() ; // output number for the next write
 
       /* Initialization */
       virtual double init_time() const; // Initialization time

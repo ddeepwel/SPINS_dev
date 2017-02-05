@@ -42,6 +42,7 @@ double Lmix;                    // Width of mixed region (m)
 // Temporal parameters
 double final_time;              // Final time (s)
 double plot_interval;           // Time between field writes (s)
+double dt_max;                  // maximum time step (s)
 
 // Restarting options
 bool restarting;                // are you restarting?
@@ -95,6 +96,7 @@ class userControl : public BaseCase {
         DIMTYPE type_z() const { return intype_z; }
 
         // Coriolis parameter, viscosity, and diffusivities
+        double get_rot_f() const { return rot_f; }
         double get_visco() const { return visco; }
         double get_diffusivity(int t_num) const {
             return kappa_rho;
@@ -103,32 +105,11 @@ class userControl : public BaseCase {
         // Temporal parameters
         double init_time() const { return initial_time; }
         int get_restart_sequence() const { return restart_sequence; }
+        double get_dt_max() const { return dt_max; }
+        double get_next_plot() { return next_plot; }
 
         // Number of tracers (the first is density)
         int numtracers() const { return Num_tracers; }
-
-        /* Modify the timestep if necessary in order to land evenly on a plot time */
-        double check_timestep (double intime, double now) {
-            // Firstly, the buoyancy frequency provides a timescale that is not
-            // accounted for with the velocity-based CFL condition.
-            if (intime > 0.5/sqrt(N2_max)) {
-                intime = 0.5/sqrt(N2_max);
-            }
-            // Now, calculate how many timesteps remain until the next writeout
-            double until_plot = next_plot - now;
-            int steps = ceil(until_plot / intime);
-            // And calculate where we will actually be after (steps) timesteps
-            // of the current size
-            double true_fintime = steps*intime;
-
-            // If that's close enough to the real writeout time, that's fine.
-            if (fabs(until_plot - true_fintime) < 1e-6) {
-                return intime;
-            } else {
-                // Otherwise, square up the timeteps.  This will always shrink the timestep.
-                return (until_plot / steps);
-            }
-        }
 
         /* Initialize velocities */
         void init_vels(DTArray & u, DTArray & v, DTArray & w) {
@@ -384,6 +365,7 @@ int main(int argc, char ** argv) {
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
     add_option("plot_interval",&plot_interval,"Time between writes");
+    add_option("dt_max",&dt_max,"Maximum time step");
 
     option_category("Restart options");
     add_option("restart",&restarting,false,"Restart from prior output time.");
@@ -435,6 +417,11 @@ int main(int argc, char ** argv) {
     mu = visco*rho_0;
     // Maximum buoyancy frequency (squared) if the initial stratification was stable
     N2_max = g*delta_rho/(2*delta_x);
+    // Maximum time step
+    if (dt_max <= 0) {
+        // if dt_max not given in spins.conf, use the buoyancy frequency
+        dt_max = 0.5/sqrt(N2_max);
+    }
 
     /* ------------------ Print some parameters --------------------- */
 
