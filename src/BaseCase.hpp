@@ -95,6 +95,8 @@ class BaseCase {
       virtual void init_vels_dump(DTArray & u, DTArray & v, DTArray & w); 
       virtual void init_tracer_restart(const std::string & field, DTArray & the_tracer); 
       virtual void init_tracer_dump(const std::string & field,  DTArray & the_tracer); 
+      virtual void init_grid_restart(const std::string & component,
+                      const std::string & filename, DTArray & grid);
 
       virtual void init_tracer(int t_num, DTArray & tracer) { 
          assert(0 && "init_tracer not implemented");

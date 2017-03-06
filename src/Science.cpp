@@ -154,123 +154,79 @@ void read_2d_slice(Array<double,3> & fillme, const char * filename,
    delete sliced; 
 }
    
+// X-component of vorticity
+void compute_vort_x(TArrayn::DTArray & vortx, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type) {
+    // Set-up
+    S_EXP expan[3];
+    assert(gradient_op);
 
-void vorticity(TArrayn::DTArray & u, TArrayn::DTArray & v, 
-      TArrayn::DTArray & w, 
-      TArrayn::DTArray * & vor_x, TArrayn::DTArray * & vor_y,
-      TArrayn::DTArray * & vor_z, double Lx, double Ly, double Lz,
-      int szx, int szy, int szz,
-      NSIntegrator::DIMTYPE DIM_X, NSIntegrator::DIMTYPE DIM_Y, 
-      NSIntegrator::DIMTYPE DIM_Z) {
-   static int Nx = 0, Ny = 0, Nz = 0;
-   static Transformer::Trans1D trans_x(szx,szy,szz,firstDim,
-                     (DIM_X == PERIODIC ? FOURIER : REAL)),
-                  trans_y(szx,szy,szz,secondDim,
-                     (DIM_Y == PERIODIC ? FOURIER : REAL)),
-                  trans_z (szx,szy,szz,thirdDim,
-                     (DIM_Z == PERIODIC ? FOURIER : REAL));
-   static blitz::TinyVector<int,3> 
-      local_lbounds(alloc_lbound(szx,szy,szz)),
-      local_extent(alloc_extent(szx,szy,szz));
-   static blitz::GeneralArrayStorage<3> 
-      local_storage(alloc_storage(szx,szy,szz));
-   static DTArray vort_x(local_lbounds,local_extent,local_storage),
-                  vort_y(local_lbounds,local_extent,local_storage),
-                  vort_z(local_lbounds,local_extent,local_storage),
-                  temp_a(local_lbounds,local_extent,local_storage);
-   /* Initialization */
-   if (Nx == 0 || Ny == 0 || Nz == 0) {
-      Nx = szx; Ny = szy; Nz = szz;
-   }
-   assert (Nx == szx && Ny == szy && Nz == szz);
-   /* x-vorticity is w_y - v_z */
-   vort_x = 0;
-   if (szy > 1) { // w_y
-      if (DIM_X == PERIODIC) {
-         deriv_fft(w,trans_y,temp_a);
-         vort_x = temp_a*(2*M_PI/Ly);
-      } else if (DIM_X == FREE_SLIP) {
-         deriv_dct(w,trans_y,temp_a);
-         vort_x = temp_a*(M_PI/Ly);
-      } else {
-         assert(DIM_X == NO_SLIP);
-         deriv_cheb(w,trans_y,temp_a);
-         vort_x = temp_a*(-2/Ly);
-      }
-   }
-   if (szz > 1) { // v_z
-      if (DIM_Z == PERIODIC) {
-         deriv_fft(v,trans_z,temp_a);
-         vort_x -= temp_a*(2*M_PI/Lz);
-      } else if (DIM_Z == FREE_SLIP) {
-         deriv_dct(v,trans_z,temp_a);
-         vort_x -= temp_a*(M_PI/Lz);
-      } else {
-         assert(DIM_Z == NO_SLIP);
-         deriv_cheb(v,trans_z,temp_a);
-         vort_x -= temp_a*(-2/Lz);
-      }
-   }
-   // y-vorticity is u_z - w_x
-   vort_y = 0;
-   if (szz > 1) { // u_z
-      if (DIM_Z == PERIODIC) {
-         deriv_fft(u,trans_z,temp_a);
-         vort_y = temp_a*(2*M_PI/Lz);
-      } else if (DIM_Z == FREE_SLIP) {
-         deriv_dct(u,trans_z,temp_a);
-         vort_y = temp_a*(M_PI/Lz);
-      } else {
-         assert(DIM_Z == NO_SLIP);
-         deriv_cheb(u,trans_z,temp_a);
-         vort_y = temp_a*(-2/Lz);
-      }
-   }
-   if (szx > 1) { // w_x
-      if (DIM_X == PERIODIC) {
-         deriv_fft(w,trans_x,temp_a);
-         vort_y -= temp_a*(2*M_PI/Lx);
-      } else if (DIM_X == FREE_SLIP) {
-         deriv_dct(w,trans_x,temp_a);
-         vort_y -= temp_a*(M_PI/Lx);
-      } else {
-         assert(DIM_X == NO_SLIP);
-         deriv_cheb(w,trans_x,temp_a);
-         vort_y -= temp_a*(-2/Lx);
-      }
-   }
-   // And finally, vort_z is v_x - u_y
-   vort_z = 0;
-   if (szx > 1) { // v_x
-      if (DIM_X == PERIODIC) {
-         deriv_fft(v,trans_x,temp_a);
-         vort_z = temp_a*(2*M_PI/Lx);
-      } else if (DIM_X == FREE_SLIP) {
-         deriv_dct(v,trans_x,temp_a);
-         vort_z = temp_a*(M_PI/Lx);
-      } else {
-         assert(DIM_X == NO_SLIP);
-         deriv_cheb(v,trans_x,temp_a);
-         vort_z = temp_a*(-2/Lx);
-      }
-   }
-   if (szy > 1) { // u_y
-      if (DIM_Y == PERIODIC) {
-         deriv_fft(u,trans_y,temp_a);
-         vort_z -= temp_a*(2*M_PI/Ly);
-      } else if (DIM_Y == FREE_SLIP) {
-         deriv_dct(u,trans_y,temp_a);
-         vort_z -= temp_a*(M_PI/Ly);
-      } else {
-         assert(DIM_Y == NO_SLIP);
-         deriv_cheb(u,trans_y,temp_a);
-         vort_z -= temp_a*(-2/Ly);
-      }
-   }
-   vor_x = &vort_x;
-   vor_y = &vort_y;
-   vor_z = &vort_z;
-   return;
+    // Setup for dv/dz
+    find_expansion(grid_type, expan, "v");
+    gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+    // get dv/dz
+    gradient_op->get_dz(&vortx,false);
+    // Invert to get the negative
+    vortx = (-1)*vortx;
+
+    // Setup for dw/dy
+    find_expansion(grid_type, expan, "w");
+    gradient_op->setup_array(&w,expan[0],expan[1],expan[2]);
+    // get dw/dy, and add to vortx
+    gradient_op->get_dy(&vortx,true);
+}
+
+// Y-component of vorticity
+void compute_vort_y(TArrayn::DTArray & vorty, TArrayn::DTArray & u, TArrayn::DTArray & w,
+       TArrayn::Grad * gradient_op, const string * grid_type) {
+    // Set-up
+    S_EXP expan[3];
+    assert(gradient_op);
+
+    // Setup for dw/dx
+    find_expansion(grid_type, expan, "w");
+    gradient_op->setup_array(&w,expan[0],expan[1],expan[2]);
+    // get dw/dx
+    gradient_op->get_dx(&vorty,false);
+    // Invert to get the negative
+    vorty = (-1)*vorty;
+
+    // Setup for du/dz
+    find_expansion(grid_type, expan, "u");
+    gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+    // get du/dz, and add to vorty
+    gradient_op->get_dz(&vorty,true);
+}
+
+// Z-component of vorticity
+void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTArray & v,
+       TArrayn::Grad * gradient_op, const string * grid_type) {
+    // Set-up
+    S_EXP expan[3];
+    assert(gradient_op);
+
+    // Setup for du/dy
+    find_expansion(grid_type, expan, "u");
+    gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+    // get du/dy
+    gradient_op->get_dy(&vortz,false);
+    // Invert to get the negative
+    vortz = (-1)*vortz;
+
+    // Setup for dv/dx
+    find_expansion(grid_type, expan, "v");
+    gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+    // get dv/dx, and add to vortz
+    gradient_op->get_dx(&vortz,true);
+}
+
+void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
+        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type) {
+    // compute each component
+    compute_vort_x(vortx, v, w, gradient_op, grid_type);
+    compute_vort_y(vorty, u, w, gradient_op, grid_type);
+    compute_vort_z(vortz, u, v, gradient_op, grid_type);
 }
 
 // Global arrays to store quadrature weights
@@ -360,4 +316,73 @@ const blitz::Array<double,1> * get_quad_z() {
       assert(0 && "Error: quadrature weights were not initalized before use");
    }
    return &_quadw_z;
+}
+
+// function to parse the expansion types
+void find_expansion(const string * grid_type, S_EXP * expan, string deriv_filename) {
+    const int x_ind = 0;
+    const int y_ind = 1;
+    const int z_ind = 2;
+    string prev_deriv, base_field;
+
+    // check if field is a derivative field
+    bool input_deriv = false;        // assume it's not a derivative
+    int var_len = deriv_filename.length();
+    if ( var_len > 2 ) {
+        if ( deriv_filename.substr(var_len-2,1) == "_" ) {
+            // if second last char is an underscore then its a derivative field
+            input_deriv = true;
+            prev_deriv = deriv_filename.substr(var_len-1,1);  // the completed derivative
+            base_field = deriv_filename.substr(0,var_len-2);  // the differentiated field
+        }
+    }
+
+    for ( int nn = 0; nn <= 2; nn++ ) {
+        if      (grid_type[nn] == "FOURIER") { expan[nn] = FOURIER; }
+        else if (grid_type[nn] == "NO_SLIP") { expan[nn] = CHEBY; }
+        else if (grid_type[nn] == "FREE_SLIP") {
+            // setup for a first derivative
+            if ( deriv_filename == "u" or base_field == "u" ) {
+                if      ( nn == x_ind ) { expan[nn] = SINE; }
+                else if ( nn == y_ind ) { expan[nn] = COSINE; }
+                else if ( nn == z_ind ) { expan[nn] = COSINE; }
+            }
+            else if ( deriv_filename == "v" or base_field == "v" ) {
+                if      ( nn == x_ind ) { expan[nn] = COSINE; }
+                else if ( nn == y_ind ) { expan[nn] = SINE; }
+                else if ( nn == z_ind ) { expan[nn] = COSINE; }
+            }
+            else if ( deriv_filename == "w" or base_field == "w") {
+                if      ( nn == x_ind ) { expan[nn] = COSINE; }
+                else if ( nn == y_ind ) { expan[nn] = COSINE; }
+                else if ( nn == z_ind ) { expan[nn] = SINE; }
+            }
+            else {
+                if      ( nn == x_ind ) { expan[nn] = COSINE; }
+                else if ( nn == y_ind ) { expan[nn] = COSINE; }
+                else if ( nn == z_ind ) { expan[nn] = COSINE; }
+            }
+        }
+    }
+
+    // adjust if input field is a derivative field
+    if ( input_deriv == true ) {
+        if      ( prev_deriv == "x" ) { expan[x_ind] = swap_trig(expan[x_ind]); }
+        else if ( prev_deriv == "y" ) { expan[y_ind] = swap_trig(expan[y_ind]); }
+        else if ( prev_deriv == "z" ) { expan[z_ind] = swap_trig(expan[z_ind]); }
+    }
+}
+// function to switch trig functions
+S_EXP swap_trig( S_EXP the_exp ) {
+    if ( the_exp == SINE ) {
+        return COSINE; }
+    else if ( the_exp == COSINE ) {
+        return SINE; }
+    else if ( the_exp == FOURIER ) {
+        return FOURIER; }
+    else if ( the_exp == CHEBY ) {
+        return CHEBY; }
+    else {
+        MPI_Finalize(); exit(1); // stop
+    }
 }
