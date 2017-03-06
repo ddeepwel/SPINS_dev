@@ -330,6 +330,14 @@ void BaseCase::write_chain(const char *filename, DTArray & val, int Iout, int Jo
     fclose(fid);
 }
 
+/* Read grid from regular output */
+void BaseCase::init_grid_restart(const std::string & component,
+        const std::string & filename, DTArray & grid) {
+    if (master()) fprintf(stdout,"Reading %s from %s\n",component.c_str(),filename.c_str());
+    read_array(grid,filename.c_str(),size_x(),size_y(),size_z());
+    return;
+}
+
 
 /* Check and dump */
 void BaseCase::check_and_dump(double clock_time, double real_start_time,

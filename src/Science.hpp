@@ -24,13 +24,16 @@ void read_2d_slice(blitz::Array<double,3> & fillme, const char * filename,
 void read_2d_restart(blitz::Array<double,3>& fillme, const char* filename,
                   int Nx, int Ny);
 
-/* Compute vorticity */
-void vorticity(TArrayn::DTArray & u, TArrayn::DTArray & v, 
-      TArrayn::DTArray & w, TArrayn::DTArray * & w_x, TArrayn::DTArray * & w_y,
-      TArrayn::DTArray * & w_z, double Lx, double Ly, double Lz,
-      int szx, int szy, int szz,
-      NSIntegrator::DIMTYPE DIM_X, NSIntegrator::DIMTYPE DIM_Y, 
-      NSIntegrator::DIMTYPE DIM_Z);
+// Vorticity
+void compute_vort_x(TArrayn::DTArray & vortx, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type);
+void compute_vort_y(TArrayn::DTArray & vorty, TArrayn::DTArray & u, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type);
+void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTArray & v,
+        TArrayn::Grad * gradient_op, const string * grid_type);
+void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
+        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type);
 
 
 // Quadrature weights
@@ -41,6 +44,11 @@ void compute_quadweights(int szx, int szy, int szz,
 const blitz::Array<double,1> * get_quad_x();
 const blitz::Array<double,1> * get_quad_y();
 const blitz::Array<double,1> * get_quad_z();
+
+// find which expansion to use based on field and boundary conditions
+void find_expansion(const string * grid_type, Transformer::S_EXP * expan, string deriv_filename);
+// switch trig function
+Transformer::S_EXP swap_trig( Transformer::S_EXP the_exp );
 
 // Equation of state for seawater, polynomial fit from
 // Brydon, Sun, Bleck (1999) (JGR)
