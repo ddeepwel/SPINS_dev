@@ -107,7 +107,6 @@ double BaseCase::get_visco()            const { return 0; }
 double BaseCase::get_diffusivity(int t) const { return 0; }
 double BaseCase::get_rot_f()            const { return 0; }
 int BaseCase::get_restart_sequence()    const { return 0; }
-double BaseCase::get_dt_max()           const { return 0; }
 double BaseCase::get_next_plot()              { return 0; }
 
 /* Initialization */
