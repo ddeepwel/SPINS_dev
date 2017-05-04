@@ -81,7 +81,9 @@ class BaseCase {
       virtual double get_diffusivity(int tracernum) const; // Diffusivity
       virtual double get_rot_f() const; // Physical rotation rate
       virtual int get_restart_sequence() const; // restart sequence
-      virtual double get_dt_max() const; // maximum time step
+      virtual double get_dt_max() const { // maximum time step
+         assert(0 && "No maximum timestep specified!");
+         abort();};
       virtual double get_next_plot() ; // output number for the next write
 
       /* Initialization */
@@ -161,6 +163,9 @@ class BaseCase {
       virtual void tracer_analysis(double t, int t_num, DTArray & tracer) {
          assert(0 && "tracer_analysis not implemented");
          abort();}; // Single-tracer analysis
+      template <class T> void add_diagnostic(const string str, const T val,
+              string & header, string & line);
+      void write_diagnostics(string header, string line, int iter, bool restarting);
 
       // Generate an automatic grid for unmapped cases
       virtual void automatic_grid(double MinX, double MinY, double MinZ, 

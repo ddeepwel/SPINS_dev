@@ -24,6 +24,7 @@ int    Nx, Ny, Nz;              // Number of points in x, y, z
 double MinX, MinY, MinZ;        // Minimum x/y/z points (m)
 // Grid types
 DIMTYPE intype_x, intype_y, intype_z;
+string grid_type[3];
 
 // Physical parameters
 double g, rot_f, rho_0;         // gravity accel (m/s^2), Coriolis frequency (s^-1), reference density (kg/m^3)
@@ -58,6 +59,7 @@ double compute_start_time;      // real (clock) time when computation begins (af
 
 // other options
 double perturb;                 // Initial velocity perturbation
+bool compute_enstrophy;         // Compute enstrophy?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -70,15 +72,15 @@ class userControl : public BaseCase {
         // Grid arrays
         Array<double,1> xx, yy, zz;
 
+        // arrays and operators for derivatives
+        Grad * gradient_op;
+        DTArray *temp1;
+
         // Timing variables (for outputs and measuring time steps)
         int plot_number;        // plot output number
         double next_plot;       // time of next output write
         double comp_duration;   // clock time since computation began
         double clock_time;      // current clock time
-
-        /* Variables for Diagnostics */
-        double max_u, max_v, max_w, max_vel, max_rho;
-        double ke_x, ke_y, ke_z, ke_tot, pe_tot;
 
         // Size of domain
         double length_x() const { return Lx; }
@@ -94,6 +96,9 @@ class userControl : public BaseCase {
         DIMTYPE type_x() const { return intype_x; }
         DIMTYPE type_y() const { return intype_y; }
         DIMTYPE type_z() const { return intype_z; }
+
+        // Record the gradient-taking object
+        void set_grad(Grad * in_grad) { gradient_op = in_grad; }
 
         // Coriolis parameter, viscosity, and diffusivities
         double get_rot_f() const { return rot_f; }
@@ -175,43 +180,6 @@ class userControl : public BaseCase {
             *tracers_f[RHO] = 0;
         }
 
-        void initialize_diagnostics_file() {
-            if (master() and !restarting) {
-                // create file for other diagnostics and write the column headers
-                FILE * diagnos_file = fopen("diagnostics.txt","a");
-                assert(diagnos_file);
-                fprintf(diagnos_file,"Iter, Clock_time, Sim_time, "
-                        "Max_U, Max_V, Max_W, Max_vel, "
-                        "KE_x, KE_y, KE_z, Total_KE, Total_PE, "
-                        "Max_density\n");
-                fclose(diagnos_file);
-            }
-        }
-
-        void write_diagnostics(double time) {
-            if (master()) {
-                /* add to the diagnostics file at each time step */
-                FILE * diagnos_file = fopen("diagnostics.txt","a");
-                assert(diagnos_file);
-                fprintf(diagnos_file,"%d, %.12g, %.12f, "
-                        "%.12g, %.12g, %.12g, %.12g, "
-                        "%.12g, %.12g, %.12g, %.12g, %.12g, "
-                        "%.12g\n",
-                        iter,comp_duration,time,
-                        max_u,max_v,max_w,max_vel,
-                        ke_x,ke_y,ke_z,ke_tot,pe_tot,
-                        max_rho);
-                fclose(diagnos_file);
-                /* and to the log file */
-                fprintf(stdout,"[%d] (%.4g) %.4f: "
-                        "%.4g %.4g %.4g "
-                        "%.4g %.4g\n",
-                        iter,comp_duration,time,
-                        max_u,max_v,max_w,
-                        ke_tot,max_rho);
-            }
-        }
-
         /* Basic analysis: compute secondary variables, and save fields and diagnostics */
         void analysis(double time, DTArray & u, DTArray & v, DTArray & w,
                 vector<DTArray *> & tracers, DTArray & pressure) {
@@ -219,13 +187,13 @@ class userControl : public BaseCase {
             iter++;
             // Set-up
             if ( iter == 1 ) {
-                // initialize the diagnostic files
-                initialize_diagnostics_file();
+                if (compute_enstrophy) {
+                    temp1 = alloc_array(Nx,Ny,Nz);
+                }
                 // Determine last plot if restarting from the dump case
                 if (restart_from_dump) {
                     next_plot = (restart_sequence+1)*plot_interval;    
                 }
-
             }
             // update clocks
             if (master()) {
@@ -235,24 +203,79 @@ class userControl : public BaseCase {
 
             /* Calculate and write out useful information */
             // Energy (PE assumes density is density anomaly)
-            ke_x = pssum(sum(0.5*rho_0*(u*u)*
+            double ke_x = pssum(sum(0.5*rho_0*(u*u)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            ke_y = pssum(sum(0.5*rho_0*(v*v)*
+            double ke_y = pssum(sum(0.5*rho_0*(v*v)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            ke_z = pssum(sum(0.5*rho_0*(w*w)*
+            double ke_z = pssum(sum(0.5*rho_0*(w*w)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            ke_tot = ke_x + ke_y + ke_z;
-            pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
+            double pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            // Vorticity / Enstrophy
+            double max_vort_x, enst_x_tot;
+            double max_vort_y, enst_y_tot;
+            double max_vort_z, enst_z_tot;
+            if (compute_enstrophy) {
+                compute_vort_x(*temp1, v, w, gradient_op, grid_type);
+                max_vort_x = psmax(max(abs(*temp1)));
+                enst_x_tot = pssum(sum(0.5*pow(*temp1,2)*
+                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                compute_vort_y(*temp1, u, w, gradient_op, grid_type);
+                max_vort_y = psmax(max(abs(*temp1)));
+                enst_y_tot = pssum(sum(0.5*pow(*temp1,2)*
+                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                compute_vort_z(*temp1, u, v, gradient_op, grid_type);
+                max_vort_z = psmax(max(abs(*temp1)));
+                enst_z_tot = pssum(sum(0.5*pow(*temp1,2)*
+                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            }
             // max of fields
-            max_u = psmax(max(abs(u)));
-            max_v = psmax(max(abs(v)));
-            max_w = psmax(max(abs(w)));
-            max_vel = psmax(max(sqrt(u*u + v*v + w*w)));
-            max_rho = psmax(max(abs(*tracers[RHO])));
+            double max_u = psmax(max(abs(u)));
+            double max_v = psmax(max(abs(v)));
+            double max_w = psmax(max(abs(w)));
+            double max_vel = psmax(max(sqrt(u*u + v*v + w*w)));
+            double max_rho = psmax(max(abs(*tracers[RHO])));
+            // total mass
+            double mass = pssum(sum(rho_0*(1+(*tracers[RHO]))*
+                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
 
-            // write to the diagnostic file
-            write_diagnostics(time);
+            if (master()) {
+                // add diagnostics to buffers
+                string header, line;
+                add_diagnostic("Iter", iter,            header, line);
+                add_diagnostic("Clock_time", comp_duration, header, line);
+                add_diagnostic("Time", time,            header, line);
+                add_diagnostic("Max_u", max_u,          header, line);
+                add_diagnostic("Max_w", max_w,          header, line);
+                add_diagnostic("Max_vel", max_vel,      header, line);
+                add_diagnostic("Max_density", max_rho,  header, line);
+                add_diagnostic("Mass", mass,            header, line);
+                add_diagnostic("KE_x", ke_x,            header, line);
+                add_diagnostic("KE_z", ke_z,            header, line);
+                add_diagnostic("PE_tot", pe_tot,        header, line);
+                if (compute_enstrophy) {
+                    add_diagnostic("Max_vort_y", max_vort_y,    header, line);
+                    add_diagnostic("Enst_y_tot", enst_y_tot,    header, line);
+                }
+                if (Ny > 1 || rot_f != 0) {
+                    add_diagnostic("Max_v", max_v,  header, line);
+                    add_diagnostic("KE_y", ke_y,    header, line);
+                    if (compute_enstrophy) {
+                        add_diagnostic("Enst_x_tot", enst_x_tot,    header, line);
+                        add_diagnostic("Max_vort_x", max_vort_x,    header, line);
+                        add_diagnostic("Enst_z_tot", enst_z_tot,    header, line);
+                        add_diagnostic("Max_vort_z", max_vort_z,    header, line);
+                    }
+                }
+
+                // Write to file
+                write_diagnostics(header, line, iter, restarting);
+                // and to the log file
+                fprintf(stdout,"[%d] (%.4g) %.4f: "
+                        "%.4g %.4g %.4g %.4g\n",
+                        iter,comp_duration,time,
+                        max_u,max_v,max_w,max_rho);
+            }
 
             /* Write to disk if at correct time */
             if ((time - next_plot) > -1e-6) {
@@ -307,6 +330,7 @@ class userControl : public BaseCase {
         // Constructor: Initialize local variables
         userControl():
             xx(split_range(Nx)), yy(Ny), zz(Nz),
+            gradient_op(0),
             plot_number(restart_sequence),
             next_plot(initial_time + plot_interval)
     {   compute_quadweights(
@@ -378,6 +402,7 @@ int main(int argc, char ** argv) {
 
     option_category("Other options");
     add_option("perturb",&perturb,"Initial perturbation in velocity");
+    add_option("compute_enstrophy",&compute_enstrophy,true,"Calculate enstrophy?");
 
     option_category("Filter options");
     add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
@@ -402,6 +427,10 @@ int main(int argc, char ** argv) {
 
     // parse expansion types
     parse_boundary_conditions(xgrid_type, ygrid_type, zgrid_type, intype_x, intype_y, intype_z);
+    // vector of expansion types
+    grid_type[0] = xgrid_type;
+    grid_type[1] = ygrid_type;
+    grid_type[2] = zgrid_type;
 
     // adjust Ly for 2D
     if (Ny==1 and Ly!=1.0) {
