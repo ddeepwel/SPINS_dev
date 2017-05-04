@@ -69,10 +69,12 @@ nonhydro_x: nonhydro_sw.o TArray.o T_util.o Parformer.o Splits.o Par_util.o Spli
 derek_x: derek.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-cases/%.x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o
+cases/%.x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o \
+           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o Sorter.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-cases/%_x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o
+cases/%_x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o \
+           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o Sorter.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 tests/test%.src.c: tests/test%.cpp CaseFileSource.c
