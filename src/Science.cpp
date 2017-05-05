@@ -9,6 +9,7 @@
 #include "Split_reader.hpp"
 #include "T_util.hpp"
 #include "Parformer.hpp"
+#include "Sorter.hpp"
 
 // Marek's Overturning Diagnostic
 
@@ -227,6 +228,67 @@ void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArra
     compute_vort_x(vortx, v, w, gradient_op, grid_type);
     compute_vort_y(vorty, u, w, gradient_op, grid_type);
     compute_vort_z(vortz, u, v, gradient_op, grid_type);
+}
+
+// Compute Background Potential Energy (BPE)
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
+        double Lx, double Ly, double g, double rho_0, int iter) {
+    // Tensor variables for indexing
+    blitz::firstIndex ii;
+    blitz::secondIndex jj;
+    blitz::thirdIndex kk;
+    // Set parameters for sorting
+    int myrank, numprocs;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+    double *local_vols;
+    double *local_vols_r;
+    local_vols   = new double[numprocs];
+    local_vols_r = new double[numprocs];
+
+    // Arrays for sorting
+    static Array<double,3> sort_rho, sort_quad;
+    static DTArray *quad3;     // quadrature weights
+    if (iter == 1) {
+        quad3 = alloc_array(Nx,Ny,Nz);
+        *quad3 = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);
+    }
+
+    // Compute sorted rho
+    sortarray(rho, *quad3, sort_rho, sort_quad);
+
+    // Volume of memory-local portion of sorted array
+    double local_vol = sum(sort_quad);
+
+    // Share local volume information with other processors
+    for (int II = 0; II < numprocs; II++) {
+        local_vols[II] = (II <= myrank) ? local_vol : 0;
+    }
+    MPI_Allreduce(local_vols, local_vols_r, numprocs, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    // The sum of the volumes with higher density is local_vols_r[rank]
+    double base_vol = local_vols_r[myrank];
+
+    // Now compute BPE from the sorted rho field
+    double tmpH = base_vol;
+    double dH = 0;
+    double BPE = 0;
+    for (int II = sort_rho.lbound(firstDim); II <= sort_rho.ubound(firstDim); II++) {
+        for (int KK = sort_rho.lbound(thirdDim); KK <= sort_rho.ubound(thirdDim); KK++) {
+            for (int JJ = sort_rho.lbound(secondDim); JJ <= sort_rho.ubound(secondDim); JJ++) {
+                dH = sort_quad(II,JJ,KK)/(Lx*Ly);
+                BPE += g*rho_0*(1+sort_rho(II,JJ,KK))*(tmpH - 0.5*dH)*dH*Lx*Ly;
+                tmpH -= dH;
+            }
+        }
+    }
+
+    // Share BPE with other processors
+    MPI_Allreduce(&BPE, &BPE_tot, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    // delete variables
+    delete[] local_vols;
+    delete[] local_vols_r;
 }
 
 // Global arrays to store quadrature weights

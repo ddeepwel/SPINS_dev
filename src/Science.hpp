@@ -35,6 +35,9 @@ void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArra
         TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
         TArrayn::Grad * gradient_op, const string * grid_type);
 
+// Background Potential Energy
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
+        double Lx, double Ly, double g, double rho_0, int iter);
 
 // Quadrature weights
 void compute_quadweights(int szx, int szy, int szz, 

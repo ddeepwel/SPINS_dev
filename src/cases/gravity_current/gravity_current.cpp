@@ -7,7 +7,7 @@
 #include "../../BaseCase.hpp"      // Support file containing default implementations of several functions
 #include "../../Options.hpp"       // config-file parser
 #include "../../Science.hpp"       // Science content
-#include <random/normal.h>      // Blitz random number generator
+#include <random/normal.h>         // Blitz random number generator
 
 using namespace ranlib;
 
@@ -60,6 +60,7 @@ double compute_start_time;      // real (clock) time when computation begins (af
 // other options
 double perturb;                 // Initial velocity perturbation
 bool compute_enstrophy;         // Compute enstrophy?
+bool compute_BPE;               // Compute enstrophy?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -211,6 +212,10 @@ class userControl : public BaseCase {
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             double pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            double BPE_tot;
+            if (compute_BPE) {
+                compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, g, rho_0, iter);
+            }
             // Vorticity / Enstrophy
             double max_vort_x, enst_x_tot;
             double max_vort_y, enst_y_tot;
@@ -253,6 +258,9 @@ class userControl : public BaseCase {
                 add_diagnostic("KE_x", ke_x,            header, line);
                 add_diagnostic("KE_z", ke_z,            header, line);
                 add_diagnostic("PE_tot", pe_tot,        header, line);
+                if (compute_BPE) {
+                    add_diagnostic("BPE_tot", BPE_tot,      header, line);
+                }
                 if (compute_enstrophy) {
                     add_diagnostic("Max_vort_y", max_vort_y,    header, line);
                     add_diagnostic("Enst_y_tot", enst_y_tot,    header, line);
@@ -403,6 +411,7 @@ int main(int argc, char ** argv) {
     option_category("Other options");
     add_option("perturb",&perturb,"Initial perturbation in velocity");
     add_option("compute_enstrophy",&compute_enstrophy,true,"Calculate enstrophy?");
+    add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
 
     option_category("Filter options");
     add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
