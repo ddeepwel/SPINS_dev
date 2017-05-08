@@ -396,7 +396,7 @@ template <class T> void BaseCase::add_diagnostic(const string str, const T val,
     header.append(str + ", ");
     // append to the line of values
     ostringstream oss;
-    oss.precision(12);
+    oss.precision(17);
     oss << scientific << val;
     line.append(oss.str() + ", ");
 }
