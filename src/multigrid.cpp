@@ -10,6 +10,16 @@
 using namespace blitz;
 using namespace std;
 
+double coarse_solve_time = 0;
+int coarse_solve_count = 0;
+
+double redblack_time = 0;
+int redblack_count = 0;
+
+double apply_op_time = 0;
+int apply_op_count = 0;
+
+
 //#define COARSE_GRID_SIZE 512
 #define COARSE_GRID_SIZE 8
 #define SYNC(__x__) { for (int _i = 0; _i < nproc; _i++) { \
@@ -1830,10 +1840,13 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
             u_ptr = u.data();
             f_ptr = f.data();
          }
+         double now = MPI_Wtime();
          int retval = umfpack_di_solve(sys,A_cols,A_rows,A_double,
                               u_ptr, f_ptr,
                               numeric_factor,
                               Control,Info);
+         coarse_solve_time += (MPI_Wtime() - now);
+         coarse_solve_count += 1;
          assert(!retval);
          if (indefinite_problem) {
 //            fprintf(stderr,"CG: True u\n");
@@ -1868,10 +1881,16 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    /* Perform one red-black relaxtion pass */
 //   if (master()) fprintf(stderr,"Pre-cyle one\n");
    if (pre >= 1) {
+      double now = MPI_Wtime();
       do_redblack(f,correction);
+      double later = MPI_Wtime();
+      redblack_time += (later - now);
+      redblack_count++;
    //cout << "New correction: " << correction;
    /* And apply the operator to find the defect */
       apply_operator(correction,defect);
+      apply_op_count++;
+      apply_op_time += (MPI_Wtime() - later);
       defect = -(defect - f);
       u = correction;
    /* Perform a second relaxation pass */
@@ -1887,11 +1906,17 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    }
    for (int i = 1; i < pre; i++) {
 //      if (master()) fprintf(stderr,"Doing RB precycle %d\n",i);
+      double now = MPI_Wtime();
       do_redblack(defect,correction);
+      double later = MPI_Wtime();
+      redblack_time += (later - now);
+      redblack_count++;
 //      if (master()) fprintf(stderr,"RB precycle %d complete\n",i);
 //      if (master()) fprintf(stderr,"correction:\n");
 //      SYNC(cerr << correction; cerr.flush());
       apply_operator(correction,f);
+      apply_op_count++;
+      apply_op_time += (MPI_Wtime() - later);
 //      if (master()) fprintf(stderr,"f:\n");
 //      SYNC(cerr << f; cerr.flush());
       u = u+correction;
@@ -1936,7 +1961,12 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+            apply_op_count++;
+            apply_op_time += (MPI_Wtime() - now);
+         }
          defect = defect-f-coarse_extra_out;
          u = u+correction;
          extra_out = coarse_extra_out;
@@ -1965,7 +1995,12 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+            apply_op_count++;
+            apply_op_time += (MPI_Wtime() - now);
+         }
 //         SYNC(cerr << f; cerr.flush()); MPI_Finalize(); exit(1);
          defect = defect-f-coarse_extra_out;
          u = u+correction;
@@ -1974,9 +2009,15 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          /* Now, two more relaxation steps */
 //         if (master()) fprintf(stderr,"F[%d] mid-cycle corrections\n",size_x);
          for (int i = 0; i < mid; i++) {
+            double now = MPI_Wtime();
             do_redblack(defect,correction);
       //      cout << "New correction: " << correction;
+            double later = MPI_Wtime();
+            redblack_count++;
+            redblack_time += (later - now);
             apply_operator(correction,f);
+            apply_op_count++;
+            apply_op_time += (MPI_Wtime() - later);
             defect = defect-f;
             u = u+correction;
          }
@@ -1998,7 +2039,12 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+            apply_op_count++;
+            apply_op_time += (MPI_Wtime() - now);
+         }
          defect = defect-f-coarse_extra_out;
          u = u+correction;
 //         fprintf(stderr,"F(2)[%d] average: %g vs %g\n",size_x,pvsum(u,my_comm)/(size_x*size_z),extra_in);
@@ -2016,9 +2062,15 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
 
    /* Now, two more relaxation steps */
    for (int i = 0; i < post; i++) {
+      double now = MPI_Wtime();
       do_redblack(defect,correction);
+      double later = MPI_Wtime();
+      redblack_count++;
+      redblack_time += (later - now);
 //      cout << "New correction: " << correction;
       apply_operator(correction,f);
+      apply_op_count++;
+      apply_op_time += (MPI_Wtime() - later);
       defect = defect-f;
       u = u+correction;
    }

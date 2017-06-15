@@ -14,6 +14,8 @@
 #include "Parformer.hpp"
 #include <blitz/array.h>
 
+extern double deriv_time;
+
 namespace TArrayn {
    /* Include in the TArrayn namespace, since this is used much like
       deriv_cheb / deriv_fft / etc */

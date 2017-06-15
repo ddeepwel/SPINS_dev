@@ -4,6 +4,7 @@
 #include <blitz/array.h>
 #include <stdio.h>
 #include <iostream>
+#include <mpi.h>
 //#include <mkl_lapack.h>
 /* LAPACK function prototype */
 extern "C" {
@@ -13,6 +14,8 @@ extern "C" {
                int * LDB, double * S, double * RCOND, int * RANK, double * WORK,
                int * LWORK, int * IWORK, int * INFO);
 }
+
+extern double gmres_lapack_time;
 /* gmres.hpp -- header class for gmres template class, which abstracts out the matrix-vector
    multiply, preconditioning, and dot products of GMRES to a user-specified type conforming
    to a provided interface.
@@ -313,9 +316,11 @@ template <class Controller> class GMRES_Solver {
 //               dgels_("N",&M,&N,&NRHS,hess_copy.data(),&LDA,
 //                     rhs_vec.data(), &LDB, lapack_workspace, &lwork_size,
 //                     &INFO);
+               double now = MPI_Wtime();
                dgelsd_(&M,&N,&NRHS,hess_copy.data(),&LDA,rhs_vec.data(),
                      &LDB, svd_vec.data(), &RCOND, &RANK, lapack_workspace,
                     &lwork_size,lapack_iworkspace,&INFO); 
+               gmres_lapack_time += (MPI_Wtime() - now);
 //               fprintf(stderr,"%s:%d RANK %d\n",__FILE__,__LINE__,RANK); fflush(stderr);
                /* rhs_vec.data() contains the answer and remainder */
 //               std::cerr << svd_vec;

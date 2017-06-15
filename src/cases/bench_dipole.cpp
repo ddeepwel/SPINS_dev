@@ -12,6 +12,9 @@
 #include <random/normal.h>
 #include <vector>
 #include "../Science.hpp"
+#include "../multigrid.hpp"
+#include "../grad.hpp"
+#include "../gmres.hpp"
 
 using namespace std;
 using namespace TArrayn;
@@ -310,6 +313,14 @@ int main(int argc, char ** argv) {
    ppois.do_run(0.001);
    now = MPI_Wtime();
    if (master()) fprintf(stderr,"Total runtime (%d iterations) complete in %gs (%gs per)\n",mycode.itercount,now-start_time,(now-start_time)/mycode.itercount);
+   if (master()) fprintf(stderr,"  %d invocations of coarse solve, for %gs (%gs per)\n",
+                  coarse_solve_count,coarse_solve_time,coarse_solve_time/coarse_solve_count);
+   if (master()) fprintf(stderr,"  %d red black smoothings, for %gs (%gs per)\n",
+                  redblack_count, redblack_time, redblack_time/redblack_count);
+   if (master()) fprintf(stderr,"  %d FD operator applications, for %gs (%gs per)\n",
+                  apply_op_count, apply_op_time, apply_op_time/apply_op_count);
+   if (master()) fprintf(stderr,"  %gs spent in spectral derivatives\n",deriv_time);
+   if (master()) fprintf(stderr,"  %gs spent in gmres-lapack internals\n",gmres_lapack_time);
    MPI_Finalize();
    return 0;
 }
