@@ -19,9 +19,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
-#include "../gmres.hpp"
-#include "../multigrid.hpp"
-#include "../grad.hpp"
+#include "../timing.hpp"
 //#include <stdlib.h>
 
 using namespace std;
@@ -409,6 +407,7 @@ int main(int argc, char ** argv) {
     /* Initialize MPI.  This is required even for single-processor runs,
        since the inner routines assume some degree of parallelization,
        even if it is trivial. */
+
     f_order = 4; f_cutoff = 0.8; f_strength = -0.33;
     MPI_Init(&argc, &argv);
 
@@ -579,16 +578,10 @@ int main(int argc, char ** argv) {
 
     // Run until the end of time
     do_mapiw.do_run(final_time);
+
    double now = MPI_Wtime();
    if (master()) fprintf(stderr,"Total runtime complete in %gs\n",now-start_time);
-   if (master()) fprintf(stderr,"  %d invocations of coarse solve, for %gs (%gs per)\n",
-                  coarse_solve_count,coarse_solve_time,coarse_solve_time/coarse_solve_count);
-   if (master()) fprintf(stderr,"  %d red black smoothings, for %gs (%gs per)\n",
-                  redblack_count, redblack_time, redblack_time/redblack_count);
-   if (master()) fprintf(stderr,"  %d FD operator applications, for %gs (%gs per)\n",
-                  apply_op_count, apply_op_time, apply_op_time/apply_op_count);
-   if (master()) fprintf(stderr,"  %gs spent in spectral derivatives\n",deriv_time);
-   if (master()) fprintf(stderr,"  %gs spent in gmres-lapack internals\n",gmres_lapack_time);
+    if (master()) timing_stack_report();
     MPI_Finalize(); // Cleanly exit MPI
     return 0; // End the program
 }
