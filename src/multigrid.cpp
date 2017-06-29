@@ -541,6 +541,7 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
    /* Allocate the operator as static, since it's large-ish */
 //   cout << "Solving: A: " << A << "B: " << B << "C: " << C << "f: " << f;
 //   fprintf(stdout,"BCs: %f %f, %f %f\n",a0,a0,b0,b1);
+   timing_push("line_solve");
    blitz::firstIndex ii; blitz::secondIndex jj;
    static Array<double,2> band_matrix(4,u.extent(firstDim),blitz::columnMajorArray);
    band_matrix = 0;
@@ -577,6 +578,7 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
    u = f;
    // LAPACK call
 //   cout << "Band matrix: " << band_matrix;
+   timing_push("line_solve_lapack");
    dgbsv_(&N, &KL, &KU, &NRHS, band_matrix.data(), &LDAB, IPIV, u.data(), &LDB, &INFO);
 //   cout << "Returning u:" << u << "Info " << INFO << endl;
    if (INFO != 0) {
@@ -585,7 +587,9 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
       cerr << band_matrix;
       cerr << f;
    }
+   timing_pop();
    assert(INFO == 0);
+   timing_pop();
 }
 
 /* Copy coefficients to the local object, and coarsen for the subproblem */
@@ -1006,8 +1010,10 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
       left_neighbour = MPI_PROC_NULL;
    }
    /* Set up the nonblocking call to receive data from the right neighbour */
+   timing_push("redblack_mpi");
    MPI_Irecv(ul_right.data(),size_z,MPI_DOUBLE,right_neighbour,
          MPI_ANY_TAG,my_comm,&rec_req);
+   timing_pop();
 
    
    /* Solve the red lines */
@@ -1122,11 +1128,13 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
 
       /* If we've just computed the local lbound, we want to send
          it to the left neighbour */
+      timing_push("redblack_mpi");
       if (i == local_x_lbound) {
 //         fprintf(stderr,"%d is lbound on processor %d, sending.  First index %g\n",i,myrank,u(i,0));
          MPI_Isend(&u(local_x_lbound,0),size_z,MPI_DOUBLE,left_neighbour,
                0, my_comm,&send_req);
       }
+      timing_pop();
    }
    // Now, black points, treating the last line specially
    for (int i = local_x_lbound+1; i <= local_x_ubound-1; i+= 2) {
@@ -1181,7 +1189,9 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
 
 
    /* Make sure we've received the upper bound by now */
+   timing_push("redblack_mpi");
    MPI_Wait(&rec_req,&ignoreme);
+   timing_pop();
 //   for (int i = 0; i < nproc; i++)  {
 //      if (i == myrank) cout << "Process " << myrank << " received right neighbour" << ul_right;
 //      MPI_Barrier(my_comm);
@@ -1191,7 +1201,10 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
    if (local_x_ubound % 2 == 0) {
       // Make sure the send completed -- this should be a null op, but
       // it's nice to clear out the request object anyway
+      timing_push("redblack_mpi");
       MPI_Wait(&send_req,&ignoreme);
+      timing_pop();
+      timing_pop(); // also pop the redblack timing stack before this irregular return
       return; 
    }
 
@@ -1290,7 +1303,9 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
    u(i,Range::all()) = u_line;
 
    // Make sure the send completed
+   timing_push("redblack_mpi");
    MPI_Wait(&send_req,&ignoreme);
+   timing_pop();
    timing_pop();
 //   fprintf(stdout,"Exiting Redblack %d/%d\n",myrank,nproc);
 }
