@@ -746,12 +746,14 @@ void MG_Solver::apply_operator(Array<double,2> & u, Array<double,2> & f) {
       }
       /* Now, send left points, and receive right points */
 //      fprintf(stderr,"%d sending left (%d, %d)\n",myrank,lefty,righty);
+      timing_push("apply_op_mpi");
       MPI_Sendrecv(&u(u.lbound(firstDim),0),size_z,MPI_DOUBLE,lefty,0,
             uin_right.data(),size_z,MPI_DOUBLE,righty,0,my_comm,&ignoreme);
       /* And vice versa -- send right, receive left */
 //      fprintf(stderr,"%d sending right (%d, %d)\n",myrank,righty,lefty);
       MPI_Sendrecv(&u(u.ubound(firstDim),0),size_z,MPI_DOUBLE,righty,0,
             uin_left.data(),size_z,MPI_DOUBLE,lefty,0,my_comm,&ignoreme);
+      timing_pop();
 //      fprintf(stderr,"%d received:\n");
 //      fprintf(stderr,"%d done\n",myrank);
    }
