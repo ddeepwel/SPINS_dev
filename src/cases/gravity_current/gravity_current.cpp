@@ -214,7 +214,7 @@ class userControl : public BaseCase {
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             double BPE_tot;
             if (compute_BPE) {
-                compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, g, rho_0, iter);
+                compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, Lz, g, rho_0, iter);
             }
             // Vorticity / Enstrophy
             double max_vort_x, enst_x_tot;
@@ -259,7 +259,7 @@ class userControl : public BaseCase {
                 add_diagnostic("KE_z", ke_z,            header, line);
                 add_diagnostic("PE_tot", pe_tot,        header, line);
                 if (compute_BPE) {
-                    add_diagnostic("BPE_tot", BPE_tot,      header, line);
+                    add_diagnostic("BPE_tot", BPE_tot,  header, line);
                 }
                 if (compute_enstrophy) {
                     add_diagnostic("Max_vort_y", max_vort_y,    header, line);

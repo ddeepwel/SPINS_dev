@@ -230,28 +230,82 @@ void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArra
     compute_vort_z(vortz, u, v, gradient_op, grid_type);
 }
 
+bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
+	return a.first < b.first;
+}
+
 // Compute Background Potential Energy (BPE)
-void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
-        double Lx, double Ly, double g, double rho_0, int iter) {
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
+        int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g,
+        double rho_0, int iter, bool mapped, Array<double,1> hill) {
     // Tensor variables for indexing
     blitz::firstIndex ii;
     blitz::secondIndex jj;
     blitz::thirdIndex kk;
-    // Set parameters for sorting
+    // Set mpi parameters
     int myrank, numprocs;
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
-    double *local_vols;
-    double *local_vols_r;
-    local_vols   = new double[numprocs];
-    local_vols_r = new double[numprocs];
 
     // Arrays for sorting
     static Array<double,3> sort_rho, sort_quad;
     static DTArray *quad3;     // quadrature weights
+    static vector<double> sort_hill(Nx), sort_dx(Nx);
+    double *local_vols =   new double[numprocs];
+    double *local_vols_r = new double[numprocs];
+    static double hill_max;
+    static double hill_vol;
+    static vector < pair<double, double> > height_width;
+
+    // Stuff to do once at the beginning
     if (iter == 1) {
+        // create array of voxels
         quad3 = alloc_array(Nx,Ny,Nz);
         *quad3 = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);
+
+        // adjust if mapped
+        if ( mapped ) {
+            *quad3 = (*quad3)*(Lz-hill(ii))/Lz;
+
+            // information about the hill
+            hill_vol = pssum(sum(hill*Ly*(*get_quad_x())));
+            hill_max = psmax(max(hill));
+
+            /* copy and sort the hill */
+            double *hill_tmp =    new double[Nx];
+            double *hill_tmptmp = new double[Nx];
+            double *dx_tmp =    new double[Nx];
+            double *dx_tmptmp = new double[Nx];
+            // create temporary empty arrays for holding the grid and hill
+            for (int II = 0; II < Nx; II++) {
+                hill_tmptmp[II] = 0.;
+                dx_tmptmp[II] = 0.;
+            }
+            // populate these arrays with their processor's information
+            for (int II = hill.lbound(firstDim); II <= hill.ubound(firstDim); II++) {
+                hill_tmptmp[II] = hill(II);
+                dx_tmptmp[II] = (*get_quad_x())(II);
+            }
+            // share across processors
+            MPI_Allreduce(hill_tmptmp, hill_tmp, Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(dx_tmptmp,   dx_tmp,   Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            // put into a double pair
+            for (int II = 0; II < Nx; II++) {
+                height_width.push_back(pair<double, double>(hill_tmp[II], dx_tmp[II]));
+            }
+            // sort the height_width pair according to the height
+            sort(height_width.begin(), height_width.end(), compare_pairs);
+            // put sorted pairs into separate vectors
+            for (int II = 0; II < Nx; II++) {
+                sort_hill[II] = height_width[II].first;
+                sort_dx[II] = height_width[II].second;
+            }
+            // clean-up
+            delete[] dx_tmp;
+            delete[] dx_tmptmp;
+            delete[] hill_tmp;
+            delete[] hill_tmptmp;
+        }
     }
 
     // Compute sorted rho
@@ -261,23 +315,66 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int
     double local_vol = sum(sort_quad);
 
     // Share local volume information with other processors
+    // ie. processor 0 has lightest fluid
     for (int II = 0; II < numprocs; II++) {
         local_vols[II] = (II <= myrank) ? local_vol : 0;
     }
     MPI_Allreduce(local_vols, local_vols_r, numprocs, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    // The sum of the volumes with higher density is local_vols_r[rank]
+    // The total volume of fluid with greater or equal density
+    // to the lightest element on the local domain
     double base_vol = local_vols_r[myrank];
 
+    // Find the depth at which base_vol will fill to
+    double tmpH, Area_star;
+    if ( !mapped ) {
+        tmpH = base_vol/Lx/Ly;
+    } else {
+        double tmp_vol = 0;
+        tmpH = sort_hill[0];
+        double dz_star;// = Lz/Nx/Ny/Nz;
+        double Lx_star = 0;
+        // check if base_vol will fill above the max hill height
+        if ((base_vol + hill_vol)/Lx/Ly >= hill_max) {
+            tmpH = (base_vol + hill_vol)/Lx/Ly;
+        } else {
+            // if it doesn't, find the depth where the fluid will fill to
+            for (int II = 0; II < Nx-1; II++) {
+                Lx_star += sort_dx[II];
+                Area_star = Lx_star*Ly;
+                dz_star = sort_hill[II+1] - sort_hill[II];
+                tmp_vol += dz_star*Area_star;
+                tmpH += dz_star;
+                if (tmp_vol > base_vol) {
+                    tmpH -= (tmp_vol - base_vol)/Area_star;
+                    break;
+                }
+            }
+        }
+    }
+
     // Now compute BPE from the sorted rho field
-    double tmpH = base_vol;
     double dH = 0;
     double BPE = 0;
     for (int II = sort_rho.lbound(firstDim); II <= sort_rho.ubound(firstDim); II++) {
         for (int KK = sort_rho.lbound(thirdDim); KK <= sort_rho.ubound(thirdDim); KK++) {
             for (int JJ = sort_rho.lbound(secondDim); JJ <= sort_rho.ubound(secondDim); JJ++) {
-                dH = sort_quad(II,JJ,KK)/(Lx*Ly);
-                BPE += g*rho_0*(1+sort_rho(II,JJ,KK))*(tmpH - 0.5*dH)*dH*Lx*Ly;
+                // Find the surface area of the water at depth tmpH
+                if ( mapped && (tmpH < hill_max) ) {
+                    double Lx_star = 0;
+                    int LL = 0;
+                    while ( ( sort_hill[LL] <= tmpH) && (LL < Nx) ) {
+                        Lx_star += sort_dx[LL];
+                        LL++;
+                    }
+                    Area_star = Lx_star*Ly;
+                } else {
+                    Area_star = Lx*Ly;
+                }
+
+                // spread volume over domain and compute BPE for that cell
+                dH = sort_quad(II,JJ,KK)/Area_star;
+                BPE += g*rho_0*(1+sort_rho(II,JJ,KK))*(tmpH - 0.5*dH)*dH*Area_star;
                 tmpH -= dH;
             }
         }

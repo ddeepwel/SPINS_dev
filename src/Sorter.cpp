@@ -407,9 +407,6 @@ void sortarray(Array<double,3> const &keys, Array<double,3> const &vals,
       MPI_Exscan(&asize,&abase,1,MPI_INT,MPI_SUM,lastcomm);
 
       if (myrank == 0) abase = 0; // This is left undefined by Exscan
-
-      // Debugging printout -- to be deleted
-      fprintf(stdout,"Proc %d: local size %d elements, local base %d\n",myrank,asize,abase);
    } 
 
    for (int ii = 0; ii < asize; ii++) {
