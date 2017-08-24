@@ -528,7 +528,7 @@ void filter3(DTArray & source, TransWrapper & tform,
          high_km = values[6];
          high_klm = values[7];
          if (0&&master()) {
-            fprintf(stderr,"Implicit filtering values:\n low_level: %g, \nhigh_k: %g, high_l: %g, high_m: %g, \nhigh_kl: %g, high_lm: %g, high_km: %g, \nhigh_klm: %g\n",low_level,high_k,high_l,high_m,high_kl,high_lm,high_km,high_klm);
+            fprintf(stdout,"Implicit filtering values:\n low_level: %g, \nhigh_k: %g, high_l: %g, high_m: %g, \nhigh_kl: %g, high_lm: %g, high_km: %g, \nhigh_klm: %g\n",low_level,high_k,high_l,high_m,high_kl,high_lm,high_km,high_klm);
          }
 
          // Now, compute what sort of strengths are required to tame possible
@@ -633,7 +633,7 @@ void filter3(DTArray & source, TransWrapper & tform,
 
 
          if (0&&master()) {
-            fprintf(stderr,"Computed iLES filter strengths: %g %g %g\n",strength_x,strength_y,strength_z);
+            fprintf(stdout,"Computed iLES filter strengths: %g %g %g\n",strength_x,strength_y,strength_z);
          }
 
          /* Rescale the k,l,m vectors such that the filter is of the appropriate
@@ -917,7 +917,7 @@ void read_array(blitz::Array<double,3> & ar, const char * filename,
          continue;
       }
 
-      fprintf(stderr,"Processor %d mapping file %s\n",myrank,filename);
+      fprintf(stdout,"Processor %d mapping file %s\n",myrank,filename);
       
       int my_fd = open(filename,O_RDONLY); // Open the file for mapping
       if (my_fd == -1) {

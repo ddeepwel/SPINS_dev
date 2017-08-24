@@ -228,26 +228,26 @@ namespace NSIntegrator {
                   default: abort();
                }
                if (master()) {
-                  fprintf(stderr,"Beginning Navier-Stokes timestepping, on a %d x %d x %d grid\n",szx,szy,szz);
-                  fprintf(stderr, "X-dimension: type %s, expansion %s\n",DIMTYPE_NAME[tx],S_EXP_NAME[Sx]);
-                  fprintf(stderr, "Y-dimension: type %s, expansion %s\n",DIMTYPE_NAME[ty],S_EXP_NAME[Sy]);
-                  fprintf(stderr, "Z-dimension: type %s, expansion %s\n",DIMTYPE_NAME[tz],S_EXP_NAME[Sz]);
-                  fprintf(stderr, "%d tracers\n",(int) tracers.size());
+                  fprintf(stdout,"Beginning Navier-Stokes timestepping, on a %d x %d x %d grid\n",szx,szy,szz);
+                  fprintf(stdout, "X-dimension: type %s, expansion %s\n",DIMTYPE_NAME[tx],S_EXP_NAME[Sx]);
+                  fprintf(stdout, "Y-dimension: type %s, expansion %s\n",DIMTYPE_NAME[ty],S_EXP_NAME[Sy]);
+                  fprintf(stdout, "Z-dimension: type %s, expansion %s\n",DIMTYPE_NAME[tz],S_EXP_NAME[Sz]);
+                  fprintf(stdout, "%d tracers\n",(int) tracers.size());
                   for (unsigned int k = 0; k < tracers.size(); k++) {
                      if (t_diffusivity[k] == 0) {
-                        fprintf(stderr,"   tracer %u nondiffusive\n",k);
+                        fprintf(stdout,"   tracer %u nondiffusive\n",k);
                      } else
-                        fprintf(stderr,"   tracer %u diffusivity %g\n",k,t_diffusivity[k]);
+                        fprintf(stdout,"   tracer %u diffusivity %g\n",k,t_diffusivity[k]);
                   }
                   if (visco == 0) {
-                     fprintf(stderr,"Inviscid problem\n");
+                     fprintf(stdout,"Inviscid problem\n");
                   } else {
-                     fprintf(stderr,"Viscosity %g\n",visco);
+                     fprintf(stdout,"Viscosity %g\n",visco);
                   }
                   if (mapped_problem) {
-                     fprintf(stderr,"Mapped grid\n");
+                     fprintf(stdout,"Mapped grid\n");
                   } else {
-                     fprintf(stderr,"Unmapped grid\n");
+                     fprintf(stdout,"Unmapped grid\n");
                   }
                }
 
@@ -262,7 +262,7 @@ namespace NSIntegrator {
                   BaseCase to return a Jacobian directly (necessary for
                   mapping), set this automatically based on lengths */
                if (mapped_problem) {
-                  if (master()) fprintf(stderr,"Performing mapping\n");
+                  if (master()) fprintf(stdout,"Performing mapping\n");
                   assert (Sz == CHEBY);
                   x_alpha = new DTArray(local_lbounds,local_extents,local_storage);
                   x_beta = new DTArray(local_lbounds,local_extents,local_storage);
@@ -274,7 +274,7 @@ namespace NSIntegrator {
                   DTArray & xgrid = *get_temp();
                   DTArray & ygrid = *get_temp();
                   DTArray & zgrid = *get_temp();
-                  if (master()) fprintf(stderr,"Getting mapped coordinates\n");
+                  if (master()) fprintf(stdout,"Getting mapped coordinates\n");
                   usercode->do_mapping(xgrid,ygrid,zgrid);
                   // Remove the base length in x from xgrid,
                   // because a linear map (x->x) doesn't play well with a trig
@@ -287,7 +287,7 @@ namespace NSIntegrator {
                      blitz::firstIndex ii;
                      xgrid = xgrid - (Lx/bl_x)*cos(ii*M_PI/(szx-1));
                   }
-                  if (master()) fprintf(stderr,"Computing Jacobian\n");
+                  if (master()) fprintf(stdout,"Computing Jacobian\n");
                   gradient->setup_array(&xgrid,(Sx==SINE || Sx==REAL ? COSINE : Sx),Sy,Sz);
                   gradient->get_dx(x_alpha);
                   *x_alpha = *x_alpha + Lx/bl_x;
