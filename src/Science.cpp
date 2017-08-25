@@ -10,6 +10,7 @@
 #include "T_util.hpp"
 #include "Parformer.hpp"
 #include "Sorter.hpp"
+#include <numeric>
 
 // Marek's Overturning Diagnostic
 
@@ -251,11 +252,12 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     static Array<double,3> sort_rho, sort_quad;
     static DTArray *quad3;     // quadrature weights
     static vector<double> sort_hill(Nx), sort_dx(Nx);
+    static vector<double> Lx_partsum(Nx), hillvol_partsum(Nx);
     double *local_vols =   new double[numprocs];
     double *local_vols_r = new double[numprocs];
     static double hill_max;
     static double hill_vol;
-    static vector < pair<double, double> > height_width;
+    static vector < pair<double, double> > height_width(Nx);
 
     // Stuff to do once at the beginning
     if (iter == 1) {
@@ -272,26 +274,29 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
             hill_max = psmax(max(hill));
 
             /* copy and sort the hill */
-            double *hill_tmp =    new double[Nx];
-            double *hill_tmptmp = new double[Nx];
-            double *dx_tmp =    new double[Nx];
-            double *dx_tmptmp = new double[Nx];
+            double *hill_tmp  = new double[Nx];
+            double *hill_tmp2 = new double[Nx];
+            double *dx_tmp  =   new double[Nx];
+            double *dx_tmp2 =   new double[Nx];
             // create temporary empty arrays for holding the grid and hill
             for (int II = 0; II < Nx; II++) {
-                hill_tmptmp[II] = 0.;
-                dx_tmptmp[II] = 0.;
-            }
-            // populate these arrays with their processor's information
-            for (int II = hill.lbound(firstDim); II <= hill.ubound(firstDim); II++) {
-                hill_tmptmp[II] = hill(II);
-                dx_tmptmp[II] = (*get_quad_x())(II);
+                if ( (II >= hill.lbound(firstDim)) and (II <= hill.ubound(firstDim)) ) {
+                    // populate these arrays with their processor's information
+                    hill_tmp2[II] = hill(II);
+                    dx_tmp2[II] = (*get_quad_x())(II);
+                } else {
+                    // else set to zero
+                    hill_tmp2[II] = 0.;
+                    dx_tmp2[II] = 0.;
+                }
             }
             // share across processors
-            MPI_Allreduce(hill_tmptmp, hill_tmp, Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-            MPI_Allreduce(dx_tmptmp,   dx_tmp,   Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(hill_tmp2, hill_tmp, Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+            MPI_Allreduce(dx_tmp2,   dx_tmp,   Nx, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
             // put into a double pair
             for (int II = 0; II < Nx; II++) {
-                height_width.push_back(pair<double, double>(hill_tmp[II], dx_tmp[II]));
+                height_width[II].first  = hill_tmp[II];
+                height_width[II].second = dx_tmp[II];
             }
             // sort the height_width pair according to the height
             sort(height_width.begin(), height_width.end(), compare_pairs);
@@ -300,11 +305,18 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
                 sort_hill[II] = height_width[II].first;
                 sort_dx[II] = height_width[II].second;
             }
+            // Compute cumulative sums of hill volume (reusing Lx_partsum)
+            for (int II = 0; II < Nx; II++) {
+                Lx_partsum[II] = sort_hill[II]*sort_dx[II]; 
+            }
+            std::partial_sum(Lx_partsum.begin(), Lx_partsum.end(), hillvol_partsum.begin());
+            // Compute cumulative sums of dxs
+            std::partial_sum(sort_dx.begin(), sort_dx.end(), Lx_partsum.begin());
             // clean-up
             delete[] dx_tmp;
-            delete[] dx_tmptmp;
+            delete[] dx_tmp2;
             delete[] hill_tmp;
-            delete[] hill_tmptmp;
+            delete[] hill_tmp2;
         }
     }
 
@@ -330,47 +342,35 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     if ( !mapped ) {
         tmpH = base_vol/Lx/Ly;
     } else {
-        double tmp_vol = 0;
-        tmpH = sort_hill[0];
-        double dz_star;// = Lz/Nx/Ny/Nz;
-        double Lx_star = 0;
         // check if base_vol will fill above the max hill height
         if ((base_vol + hill_vol)/Lx/Ly >= hill_max) {
             tmpH = (base_vol + hill_vol)/Lx/Ly;
         } else {
             // if it doesn't, find the depth where the fluid will fill to
-            for (int II = 0; II < Nx-1; II++) {
-                Lx_star += sort_dx[II];
-                Area_star = Lx_star*Ly;
-                dz_star = sort_hill[II+1] - sort_hill[II];
-                tmp_vol += dz_star*Area_star;
-                tmpH += dz_star;
-                if (tmp_vol > base_vol) {
-                    tmpH -= (tmp_vol - base_vol)/Area_star;
-                    break;
-                }
+            int II = 0;
+            while ((base_vol > Lx_partsum[II]*sort_hill[II] - hillvol_partsum[II]) and (II<Nx-1)) {
+                II++;
             }
+            assert(II>0 && "Something bad happened leading up to the tmpH calculation.\n");
+            // now subtract off the bit we went over by (draw yourself a picture, it works)
+            tmpH = sort_hill[II] - (sort_hill[II]*Lx_partsum[II] - base_vol - hillvol_partsum[II])/Lx_partsum[II-1];
         }
     }
 
     // Now compute BPE from the sorted rho field
     double dH = 0;
     double BPE = 0;
+    int LL = Nx-1;
     for (int II = sort_rho.lbound(firstDim); II <= sort_rho.ubound(firstDim); II++) {
         for (int KK = sort_rho.lbound(thirdDim); KK <= sort_rho.ubound(thirdDim); KK++) {
             for (int JJ = sort_rho.lbound(secondDim); JJ <= sort_rho.ubound(secondDim); JJ++) {
                 // Find the surface area of the water at depth tmpH
                 if ( mapped && (tmpH < hill_max) ) {
-                    double Lx_star = 0;
-                    int LL = 0;
-                    while ( ( sort_hill[LL] <= tmpH) && (LL < Nx) ) {
-                        Lx_star += sort_dx[LL];
-                        LL++;
+                    while ( (sort_hill[LL] > tmpH) && (LL >= 0) ) {
+                        LL--;
                     }
-                    Area_star = Lx_star*Ly;
-                } else {
-                    Area_star = Lx*Ly;
                 }
+                Area_star = Lx_partsum[LL]*Ly;
 
                 // spread volume over domain and compute BPE for that cell
                 dH = sort_quad(II,JJ,KK)/Area_star;
