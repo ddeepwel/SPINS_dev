@@ -238,7 +238,7 @@ bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
 // Compute Background Potential Energy (BPE)
 void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
         int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g,
-        double rho_0, int iter, bool mapped, Array<double,1> hill) {
+        double rho_0, int iter, bool mapped, Array<double,1> hill, bool dimensional_rho) {
     // Tensor variables for indexing
     blitz::firstIndex ii;
     blitz::secondIndex jj;
@@ -348,7 +348,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
         } else {
             // if it doesn't, find the depth where the fluid will fill to
             int II = 0;
-            while ((base_vol > Lx_partsum[II]*sort_hill[II] - hillvol_partsum[II]) and (II<Nx-1)) {
+            while ( (base_vol > Lx_partsum[II]*sort_hill[II] - hillvol_partsum[II]) and (II<Nx-1) ) {
                 II++;
             }
             assert(II>0 && "Something bad happened leading up to the tmpH calculation.\n");
@@ -366,7 +366,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
             for (int JJ = sort_rho.lbound(secondDim); JJ <= sort_rho.ubound(secondDim); JJ++) {
                 // Find the surface area of the water at depth tmpH
                 if ( mapped && (tmpH < hill_max) ) {
-                    while ( (sort_hill[LL] > tmpH) && (LL >= 0) ) {
+                    while ( (sort_hill[LL] > tmpH) && (LL > 0) ) {
                         LL--;
                     }
                 }
@@ -374,7 +374,13 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
 
                 // spread volume over domain and compute BPE for that cell
                 dH = sort_quad(II,JJ,KK)/Area_star;
-                BPE += g*rho_0*(1+sort_rho(II,JJ,KK))*(tmpH - 0.5*dH)*dH*Area_star;
+                if (dimensional_rho) {
+                    // rho is dimensional density
+                    BPE += g*sort_rho(II,JJ,KK)*(tmpH - 0.5*dH)*dH*Area_star;
+                } else {
+                    // rho is density anomaly
+                    BPE += g*rho_0*(1+sort_rho(II,JJ,KK))*(tmpH - 0.5*dH)*dH*Area_star;
+                }
                 tmpH -= dH;
             }
         }
