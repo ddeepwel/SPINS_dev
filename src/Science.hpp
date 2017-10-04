@@ -38,7 +38,7 @@ void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArra
 // Background Potential Energy
 void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
         double Lx, double Ly, double Lz, double g, double rho_0, int iter,
-        bool mapped = false, Array<double,1> hill = Array<double,1>(), bool dimensional_rho);
+        bool mapped = false, Array<double,1> hill = Array<double,1>(), bool dimensional_rho = false);
 
 // Quadrature weights
 void compute_quadweights(int szx, int szy, int szz, 
