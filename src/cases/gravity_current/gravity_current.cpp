@@ -165,7 +165,7 @@ class userControl : public BaseCase {
                 init_tracer_dump("rho",rho);
             } else {
                 // Density configuration
-                rho = delta_rho*0.5*(1.0-tanh((xx(ii)-Lmix)/delta_x));
+                rho = delta_rho*0.5*(1.0-tanh((xx(ii)-Lmix)/delta_x)) + 0*jj + 0*kk;
                 // Write the array
                 write_array(rho,"rho",plot_number);
             }
