@@ -369,8 +369,10 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
                     while ( (sort_hill[LL] > tmpH) && (LL > 0) ) {
                         LL--;
                     }
+                    Area_star = Lx_partsum[LL]*Ly;
+                } else {
+                    Area_star = Lx*Ly;
                 }
-                Area_star = Lx_partsum[LL]*Ly;
 
                 // spread volume over domain and compute BPE for that cell
                 dH = sort_quad(II,JJ,KK)/Area_star;
