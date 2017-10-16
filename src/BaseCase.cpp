@@ -344,35 +344,41 @@ void BaseCase::init_grid_restart(const std::string & component,
 void BaseCase::check_and_dump(double clock_time, double real_start_time,
         double compute_time, double sim_time, double avg_write_time, int plot_number,
         DTArray & u, DTArray & v, DTArray & w, vector<DTArray *> & tracer){
-    int do_dump = 0;
-    if (master()) {
-        double total_run_time = clock_time - real_start_time;
+    if (compute_time > 0) {
+        // default is to not dump variables
+        int do_dump = 0;
 
         // check if close to end of compute time
-        if ((compute_time > 0) && (compute_time - total_run_time < 3*avg_write_time)){
-            do_dump = 1; // true
-        }
-    }
-    MPI_Bcast(&do_dump, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-    if (do_dump == 1) {
-        if (master()){
-            fprintf(stdout,"Too close to final time, dumping!\n");
-        }
-        write_variables(u, v, w, tracer);
-
-        // Write the dump time to a text file for restart purposes
-        if (master()){
-            FILE * dump_file; 
-            dump_file = fopen("dump_time.txt","w");
-            assert(dump_file);
-            fprintf(dump_file,"The dump time was:\n%.17g\n", sim_time);
-            fprintf(dump_file,"The dump index was:\n%d\n", plot_number);
-            fclose(dump_file);
+        if (master()) {
+            double total_run_time = clock_time - real_start_time;
+            if (compute_time - total_run_time < 3*avg_write_time) {
+                do_dump = 1; // true
+            }
         }
 
-        // Die  gracefully
-        MPI_Finalize(); exit(0);
+        // Broadcast to all processors whether to dump or not
+        MPI_Bcast(&do_dump, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        // Dump variables if close to end of compute time
+        if (do_dump == 1) {
+            if (master()){
+                fprintf(stdout,"Too close to final time, dumping!\n");
+            }
+            write_variables(u, v, w, tracer);
+
+            // Write the dump time to a text file for restart purposes
+            if (master()){
+                FILE * dump_file;
+                dump_file = fopen("dump_time.txt","w");
+                assert(dump_file);
+                fprintf(dump_file,"The dump time was:\n%.17g\n", sim_time);
+                fprintf(dump_file,"The dump index was:\n%d\n", plot_number);
+                fclose(dump_file);
+            }
+
+            // Die gracefully
+            MPI_Finalize(); exit(0);
+        }
     }
 }
 
