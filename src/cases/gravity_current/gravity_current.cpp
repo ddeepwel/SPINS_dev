@@ -204,12 +204,19 @@ class userControl : public BaseCase {
 
             /* Calculate and write out useful information */
             // Energy (PE assumes density is density anomaly)
-            double ke_x = pssum(sum(0.5*rho_0*(u*u)*
-                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            double ke_y = pssum(sum(0.5*rho_0*(v*v)*
-                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            double ke_z = pssum(sum(0.5*rho_0*(w*w)*
-                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            double ke_x, ke_y, ke_z;
+            if ( Nx > 1 ) {
+                ke_x = pssum(sum(0.5*rho_0*(u*u)*
+                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            }
+            if ( Ny > 1 ) {
+                ke_y = pssum(sum(0.5*rho_0*(v*v)*
+                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            }
+            if ( Nz > 1 ) {
+                ke_z = pssum(sum(0.5*rho_0*(w*w)*
+                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            }
             double pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             double BPE_tot;
@@ -221,18 +228,27 @@ class userControl : public BaseCase {
             double max_vort_y, enst_y_tot;
             double max_vort_z, enst_z_tot;
             if (compute_enstrophy) {
-                compute_vort_x(*temp1, v, w, gradient_op, grid_type);
-                max_vort_x = psmax(max(abs(*temp1)));
-                enst_x_tot = pssum(sum(0.5*pow(*temp1,2)*
-                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-                compute_vort_y(*temp1, u, w, gradient_op, grid_type);
-                max_vort_y = psmax(max(abs(*temp1)));
-                enst_y_tot = pssum(sum(0.5*pow(*temp1,2)*
-                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-                compute_vort_z(*temp1, u, v, gradient_op, grid_type);
-                max_vort_z = psmax(max(abs(*temp1)));
-                enst_z_tot = pssum(sum(0.5*pow(*temp1,2)*
-                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                // x-vorticity
+                if (Ny > 1 and Nz > 1) {
+                    compute_vort_x(*temp1, v, w, gradient_op, grid_type);
+                    max_vort_x = psmax(max(abs(*temp1)));
+                    enst_x_tot = pssum(sum(0.5*pow(*temp1,2)*
+                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                }
+                // y-vorticity
+                if (Nx > 1 and Nz > 1) {
+                    compute_vort_y(*temp1, u, w, gradient_op, grid_type);
+                    max_vort_y = psmax(max(abs(*temp1)));
+                    enst_y_tot = pssum(sum(0.5*pow(*temp1,2)*
+                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                }
+                // z-vorticity
+                if (Nx > 1 and Ny > 1) {
+                    compute_vort_z(*temp1, u, v, gradient_op, grid_type);
+                    max_vort_z = psmax(max(abs(*temp1)));
+                    enst_z_tot = pssum(sum(0.5*pow(*temp1,2)*
+                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                }
             }
             // max of fields
             double max_u = psmax(max(abs(u)));
