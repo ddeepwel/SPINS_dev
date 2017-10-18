@@ -70,6 +70,9 @@ namespace NSIntegrator {
 
             double desttime = times[0] + the_timestep;
 
+            // Analyze the initial conditions
+            usercode->analysis(times[0],us[0],vs[0],ws[0],tracers_now,pressure);
+
             /* Now, take timesteps until we reach our one-timestep destination*/
             
             bool starting_step = false;
