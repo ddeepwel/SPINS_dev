@@ -60,7 +60,8 @@ double compute_start_time;      // real (clock) time when computation begins (af
 // other options
 double perturb;                 // Initial velocity perturbation
 bool compute_enstrophy;         // Compute enstrophy?
-bool compute_BPE;               // Compute enstrophy?
+bool compute_dissipation;       // Compute dissipation?
+bool compute_BPE;               // Compute background potential energy?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -188,7 +189,7 @@ class userControl : public BaseCase {
             iter++;
             // Set-up
             if ( iter == 1 ) {
-                if (compute_enstrophy) {
+                if (compute_enstrophy or compute_dissipation) {
                     temp1 = alloc_array(Nx,Ny,Nz);
                 }
                 // Determine last plot if restarting from the dump case
@@ -203,6 +204,7 @@ class userControl : public BaseCase {
             }
 
             /* Calculate and write out useful information */
+
             // Energy (PE assumes density is density anomaly)
             double ke_x, ke_y, ke_z;
             if ( Nx > 1 ) {
@@ -222,6 +224,15 @@ class userControl : public BaseCase {
             double BPE_tot;
             if (compute_BPE) {
                 compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, Lz, g, rho_0, iter);
+            }
+            // viscous dissipation
+            double diss_tot = 0;
+            double max_diss;
+            if (compute_dissipation) {
+                dissipation(*temp1, u, v, w, gradient_op, grid_type, Nx, Ny, Nz, mu);
+                max_diss = psmax(max(*temp1));
+                diss_tot = pssum(sum((*temp1)*
+                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
             // Vorticity / Enstrophy
             double max_vort_x, enst_x_tot;
@@ -276,6 +287,10 @@ class userControl : public BaseCase {
                 add_diagnostic("PE_tot", pe_tot,        header, line);
                 if (compute_BPE) {
                     add_diagnostic("BPE_tot", BPE_tot,  header, line);
+                }
+                if (compute_dissipation) {
+                    add_diagnostic("Max_diss", max_diss, header, line);
+                    add_diagnostic("Diss_tot", diss_tot, header, line);
                 }
                 if (compute_enstrophy) {
                     add_diagnostic("Max_vort_y", max_vort_y,    header, line);
@@ -427,6 +442,7 @@ int main(int argc, char ** argv) {
     option_category("Other options");
     add_option("perturb",&perturb,"Initial perturbation in velocity");
     add_option("compute_enstrophy",&compute_enstrophy,true,"Calculate enstrophy?");
+    add_option("compute_dissipation",&compute_dissipation,true,"Calculate dissipation?");
     add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
 
     option_category("Filter options");
