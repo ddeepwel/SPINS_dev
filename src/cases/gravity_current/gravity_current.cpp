@@ -234,6 +234,9 @@ class userControl : public BaseCase {
                 diss_tot = pssum(sum((*temp1)*
                             (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
+            // Conversion from internal energy to background potential energy
+            double phi_i;
+            compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
             // Vorticity / Enstrophy
             double max_vort_x, enst_x_tot;
             double max_vort_y, enst_y_tot;
@@ -285,6 +288,7 @@ class userControl : public BaseCase {
                 add_diagnostic("KE_x", ke_x,            header, line);
                 add_diagnostic("KE_z", ke_z,            header, line);
                 add_diagnostic("PE_tot", pe_tot,        header, line);
+                add_diagnostic("BPE_from_int", phi_i,   header, line);
                 if (compute_BPE) {
                     add_diagnostic("BPE_tot", BPE_tot,  header, line);
                 }

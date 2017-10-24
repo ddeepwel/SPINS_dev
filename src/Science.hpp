@@ -39,10 +39,14 @@ void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
         const int Nx, const int Ny, const int Nz, const double visco);
 
-// Background Potential Energy
+// Background Potential Energy (BPE)
 void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
         double Lx, double Ly, double Lz, double g, double rho_0, int iter,
         bool mapped = false, Array<double,1> hill = Array<double,1>(), bool dimensional_rho = false);
+// Internal energy converted to BPE
+void compute_BPE_from_internal(double & phi_i, TArrayn::DTArray & rho,
+        double kappa_rho, double rho_0, double g, int Nz,
+        bool dimensional_rho = false, bool mapped = false, TArrayn::DTArray * Hprime = NULL);
 
 // Quadrature weights
 void compute_quadweights(int szx, int szy, int szz, 

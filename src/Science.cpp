@@ -454,6 +454,46 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     delete[] local_vols_r;
 }
 
+// Internal energy converted to Background potential energy
+// See Winters et al. 1995 (Available potential energy and mixing in density-stratified fluids)
+// phi_i = - kappa * g * (surface integral of density at top boundary
+//                        minus the surface integral of density at bottom boundary)
+void compute_BPE_from_internal(double & phi_i, TArrayn::DTArray & rho,
+        double kappa_rho, double rho_0, double g, int Nz,
+        bool dimensional_rho, bool mapped, TArrayn::DTArray * Hprime) {
+    // Tensor variables for indexing
+    blitz::firstIndex ii;
+    blitz::secondIndex jj;
+    blitz::Range all = blitz::Range::all();
+
+    if ( !mapped ) {
+        // Unmapped case
+        if ( !dimensional_rho ) {
+            phi_i = -kappa_rho * g * pssum(sum(
+                        rho_0 * (rho(all,all,Nz-1) - rho(all,all,0))
+                        * (*get_quad_x())(ii) * (*get_quad_y())(jj) ));
+        } else {
+            phi_i = -kappa_rho * g * pssum(sum(
+                        (rho(all,all,Nz-1) - rho(all,all,0))
+                        * (*get_quad_x())(ii) * (*get_quad_y())(jj) ));
+        }
+    } else {
+        fprintf(stderr,"BPE from internal energy calculation is not available in mapped cases.\n");
+        assert(0);
+        // Mapped case
+        // Need to fix
+        /*if ( !dimensional_rho ) {
+            phi_i = -kappa_rho * g * pssum(sum(
+                        rho_0 * ( rho(all,all,Nz-1) - rho(all,all,0)*pow(1+pow(*Hprime,2),0.5) )
+                        * (*get_quad_x())(ii) * (*get_quad_y())(jj) ));
+        } else {
+            phi_i = -kappa_rho * g * pssum(sum(
+                        ( rho(all,all,Nz-1) - rho(all,all,0)*pow(1+pow(*Hprime,2),0.5) )
+                        * (*get_quad_x())(ii) * (*get_quad_y())(jj) ));
+        }*/
+    }
+}
+
 // Global arrays to store quadrature weights
 Array<double,1> _quadw_x, _quadw_y, _quadw_z;
 
