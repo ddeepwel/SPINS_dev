@@ -157,6 +157,7 @@ void MG_Solver::rebalance_line(Array<double,1> & orig, Array<double,1> & balance
    if (balance.extent(firstDim) > 0) balance = b_2d(Range::all(),0);
 }
 void MG_Solver::rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm c, BalanceGroup btype) {
+   timing_push("rebalance");
    int o_lbound = orig.lbound(firstDim);
    int o_ubound = orig.ubound(firstDim);
    int b_lbound = balance.lbound(firstDim);
@@ -250,8 +251,11 @@ void MG_Solver::rebalance_array(Array<double,2> & orig, Array<double,2> & balanc
 
    assert(orig.size() == s_total && balance.size() == r_total);
    
+   timing_push("rebalance_mpi");
    MPI_Alltoallv(orig_data,s_counts,s_displs,MPI_DOUBLE,
          balance.data(),r_counts,r_displs,MPI_DOUBLE,c);
+   timing_pop(); // rebalance_mpi
+   timing_pop(); // rebalance
    // And done
 }
 void MG_Solver::set_x_symmetry(SYM_TYPE s) {
@@ -523,6 +527,69 @@ MG_Solver::MG_Solver(Array<double,1> xvals, blitz::Array<double,1> zvals,
 }
   
 /* Line solve */
+#if 1
+void line_solve(Array<double,1> & u, Array<double,1> & f,
+      Array<double,1> & A, Array<double,1> & B,
+      Array<double,1> & C, double a0, double a1, 
+      double b0, double b1, Array<double,2> & Dz,
+      Array<double,2> & Dzz) {
+   /* The objective here is to solve the line operator as a tridiangonal banded
+      matrix.  While LAPACK has solvers for this, timing suggests that the basic
+      banded solver is much slower than expected.  Problems that arise in SPINS
+      should not be difficult ones that require partial pivoting.  The problem
+      to solve is:
+          A(z)*Dzz*u + B(z)*dz*u + C(z)*u = f(z), with
+          a0*u + b0*Dz*u = f0 @ z=0 (bottom) and
+          a1*u + b1*Dz*u = f1 @ z=1 (top) */
+
+   timing_push("line_solve");
+
+   // Build the band matrix itself, re-using the LAPACK formulation
+   blitz::firstIndex ii; 
+   blitz::Range all = Range::all();
+   static Array<double,1> an(u.extent(firstDim)), bn(u.extent(firstDim)), cn(u.extent(firstDim));
+   int top = u.ubound(firstDim);
+   an = 0; bn = 0; cn = 0;
+   /* Set the band matrix based on our input parameters */
+   // Main diagonal
+   bn(all) = A*Dzz(all,1) + B*Dz(all,1) + C;
+   // Subdiagonal
+   an(all) = A*Dzz(all,0) + B*Dz(all,0);
+   // Superdiagonal
+   cn(all) = A*Dzz(all,2) + B*Dz(all,2);
+
+   /* BC's */
+
+   /* Bottom -- a0*u+b0*Dz*u */
+   bn(0) = a0 + b0*Dz(0,1); // Main diagonal from Dz
+   cn(0) = b0*Dz(0,2); // Superdiagonal from Dz
+   an(0) = 0;
+
+   /* Top -- a1*u + b1*Dz*u */
+   bn(top) = a1 + b1*Dz(top,1);
+   an(top) = b1*Dz(top,0); // Subdiagonal from Dz
+   cn(top) = 0;
+
+   // Thomas algorithm, via Wikipedia, note base-zero indexing
+
+   cn(0) = cn(0)/bn(0);
+   u(0) = f(0)/bn(0); // Use u for d', which will be overwritten by the final sol'n
+
+   for (int i = 1; i < top; i++) {
+      cn(i) = cn(i)/(bn(i)-an(i)*cn(i-1));
+      u(i) = (f(i) - an(i)*u(i-1))/(bn(i)-an(i)*cn(i-1));
+   }
+
+   u(top) = (f(top)-an(top)*u(top-1))/(bn(top)-an(top)*cn(top-1));
+
+   // Back substitution
+   for (int i = top-1; i >= 0; i--) {
+      u(i) = u(i) - cn(i)*u(i+1);
+   }
+
+   timing_pop(); // line_solve
+}
+#else
 void line_solve(Array<double,1> & u, Array<double,1> & f,
       Array<double,1> & A, Array<double,1> & B,
       Array<double,1> & C, double a0, double a1, 
@@ -591,6 +658,7 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
    assert(INFO == 0);
    timing_pop();
 }
+#endif
 
 /* Copy coefficients to the local object, and coarsen for the subproblem */
 void MG_Solver::problem_setup(Array<double,2> & Uxx, Array<double,2> & Uzz,
@@ -1804,6 +1872,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    Array<double,2> defect(f.lbound(),f.extent()), correction(u.lbound(),u.extent());
    //fprintf(stderr,"_cycle: mean condition %g\n",extra_in);
 //   if (master()) fprintf(stderr,"Call to _cycle[%d]\n",size_x);
+   //timing_push("_cycle");
    if (coarsest_level) {
       // Coarse-grid solve
       if (myrank != 0) return;
@@ -1949,13 +2018,17 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
 //         SYNC(cerr << coarse_f);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"Recursive(V) solve\n");
+            //timing_pop(); // pop _cycle to avoid recusive nesting
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   coarse_extra_in,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"Recursive(V) solve finished\n");
          } else {
             //fprintf(stderr,"No coarse solve\n");
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
 //         if (master()) fprintf(stderr,"V[%d] local coarse correction\n",size_x);
 //         SYNC(cerr << coarse_u);
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
@@ -1980,13 +2053,17 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve begin\n",size_x);
+            //timing_pop(); // pop _cycle
             coarse_solver->_cycle(CYCLE_F,coarse_f,coarse_u,
                   extra_in,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve end\n",size_x);
          } else {
 //            fprintf(stderr,"No coarse solve\n");
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
 //         if (master()) {
 //            fprintf(stderr,"coarseu: %d - %d\n",coarse_u.lbound(firstDim),coarse_u.ubound(firstDim));
 //         }
@@ -2021,12 +2098,16 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve begin\n",size_x);
+            //timing_pop(); // _cycle
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   0,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve end\n",size_x);
          } else {
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
          {
@@ -2059,6 +2140,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
  //  SYNC(cerr << myrank << ": " << u(u.ubound(firstDim),0) << endl;cerr.flush();)
 
    // Et voila, return
+   //timing_pop(); // _cycle
    return;
 }
 
@@ -2068,6 +2150,7 @@ void MG_Solver::build_sparse_operator() {
    // than having to deal with "influences by a grid point" one at a time.
 #define cell_index(a,b) (((a)*size_z)+(b)) 
 
+   timing_push("coarse_factor");
    assert(nproc == 1);
 //   fprintf(stderr,"Sparse building: (%dx%d) %d %d %d\n",size_x,size_z,int(any_dxz),int(bc_tangent),int(bc_normal));
 //   double now = MPI_Wtime();
@@ -2953,6 +3036,7 @@ void MG_Solver::build_sparse_operator() {
    }
 //   double later = MPI_Wtime();
 //   fprintf(stderr,"Coarse operator construction took %g sec\n",later-now);
+   timing_pop(); // coarse_factor
 
 }
 

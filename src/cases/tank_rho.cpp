@@ -347,8 +347,8 @@ class mapiw : public BaseCase {
                 t_startup = clock_time - real_start_time;
                 fprintf(stdout,"Start-up time: %g s.\n",t_startup);
             }
-            if (master() && itercount == 1) fprintf(stdout,"[Iter], (Clock time), Sim time:, Max U, Max V, Max W, Max KE, Total KE, Max Density\n");
-            if (master()) fprintf(stdout,"[%d] (%.12g) %.6f: %.6g %.6g %.6g %.6g %.6g %.6g\n",
+            if (master() && itercount == 1) fprintf(stderr,"[Iter], (Clock time), Sim time:, Max U, Max V, Max W, Max KE, Total KE, Max Density\n");
+            if (master()) fprintf(stderr,"[%d] (%.12g) %.6f: %.6g %.6g %.6g %.6g %.6g %.6g\n",
                     itercount,t_step,time,max_u,max_v,max_w,max_ke,ke_tot,max_rho);
 
             // Write out the chain if savechain is true
@@ -581,7 +581,24 @@ int main(int argc, char ** argv) {
 
    double now = MPI_Wtime();
    if (master()) fprintf(stderr,"Total runtime complete in %gs\n",now-start_time);
-    if (master()) timing_stack_report();
+   {
+      int numprocs, myrank;
+      MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
+      MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
+
+      for (int i = 0; i < numprocs; i++) {
+         if (myrank == i) {
+            MPI_Barrier(MPI_COMM_WORLD);
+            fprintf(stderr,"Processor %d timing report\n",myrank);
+            timing_stack_report();
+            MPI_Barrier(MPI_COMM_WORLD);
+         } else {
+            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+         }
+      }
+   }
+    //if (master()) timing_stack_report();
     MPI_Finalize(); // Cleanly exit MPI
     return 0; // End the program
 }
