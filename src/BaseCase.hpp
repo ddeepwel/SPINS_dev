@@ -172,6 +172,14 @@ class BaseCase {
               Array<double,1> *xx=0, Array<double,1> *yy=0, Array<double,1> *zz=0);
 };
 
+#include "BaseCase_impl.cc" // Include the implementation of the add_diagnostic template
+
+// Note explicitly instantiated add_diagnostic template functions
+extern template void BaseCase::add_diagnostic<int>(const string str, const int val,
+        string & header, string & line);
+extern template void BaseCase::add_diagnostic<double>(const string str, const double val,
+        string & header, string & line);
+
 // parse expansion types
 void parse_boundary_conditions(const string xgrid_type, const string ygrid_type,
         const string zgrid_type, DIMTYPE & intype_x, DIMTYPE & intype_y, DIMTYPE & intype_z);

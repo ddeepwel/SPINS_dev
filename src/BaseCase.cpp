@@ -395,17 +395,8 @@ void BaseCase::successful_dump(int plot_number, double final_time, double plot_i
     }
 }
 
-// append a diagnostic to string for printing into diagnostic file
-template <class T> void BaseCase::add_diagnostic(const string str, const T val,
-        string & header, string & line) {
-    // append to the header
-    header.append(str + ", ");
-    // append to the line of values
-    ostringstream oss;
-    oss.precision(17);
-    oss << scientific << val;
-    line.append(oss.str() + ", ");
-}
+// Explicitly instantiate common add_diagnostic templates, for integer and double
+// types
 template void BaseCase::add_diagnostic<int>(const string str, const int val,
         string & header, string & line);
 template void BaseCase::add_diagnostic<double>(const string str, const double val,
