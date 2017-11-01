@@ -206,12 +206,12 @@ class userControl : public BaseCase {
             /* Calculate and write out useful information */
 
             // Energy (PE assumes density is density anomaly)
-            double ke_x, ke_y, ke_z;
+            double ke_x = 0, ke_y = 0, ke_z = 0;
             if ( Nx > 1 ) {
                 ke_x = pssum(sum(0.5*rho_0*(u*u)*
                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
-            if ( Ny > 1 ) {
+            if ( Ny > 1 || rot_f != 0) {
                 ke_y = pssum(sum(0.5*rho_0*(v*v)*
                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
