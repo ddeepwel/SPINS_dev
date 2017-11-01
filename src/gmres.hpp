@@ -4,6 +4,8 @@
 #include <blitz/array.h>
 #include <stdio.h>
 #include <iostream>
+#include <mpi.h>
+#include "timing.hpp"
 //#include <mkl_lapack.h>
 /* LAPACK function prototype */
 extern "C" {
@@ -13,6 +15,7 @@ extern "C" {
                int * LDB, double * S, double * RCOND, int * RANK, double * WORK,
                int * LWORK, int * IWORK, int * INFO);
 }
+
 /* gmres.hpp -- header class for gmres template class, which abstracts out the matrix-vector
    multiply, preconditioning, and dot products of GMRES to a user-specified type conforming
    to a provided interface.
@@ -133,13 +136,18 @@ template <class Controller> class GMRES_Solver {
         int innerits = 0; // count number of inner iterations
         for (int i = 0; i < outer; i++) {
            /* Call the inner iteration */
+           timing_push("gmres_outer");
+           timing_push("gmres_inner");
            innerits += gmres_inner(rnew, xinner, inner, prec*start_norm); 
+           timing_pop();
            if (i != 0) {
               ops->basis_fma(x,xinner,1); // Add the result to x
            } else {
               ops->basis_copy(x,xinner);
            }
+           timing_push("gmres_op");
            ops->matrix_multiply(x,rapply); // M*x = Rapply
+           timing_pop();
            ops->resid_copy(rnew,b); /* Rnew = b */
            ops->resid_fma(rnew,rapply,-1); /* Rnew = b - A*x */
            error_norm = sqrt(ops->resid_dot(rnew,rnew));
@@ -155,8 +163,10 @@ template <class Controller> class GMRES_Solver {
               if (err_out) {
                  *err_out = error_norm/start_norm;
               }
+              timing_pop();
               return(innerits);
            }
+           timing_pop();
         }
         /* Free temporaries */
         ops->free_resid(rnew);
@@ -274,11 +284,16 @@ template <class Controller> class GMRES_Solver {
          double remaining_error = 1;
          for (my_it = 1; my_it <= num_its; my_it++) {
             /* Find an x vector that approximately solves the prior basis */
+            timing_push("gmres_precond");
             ops->precondition(resid_vec(my_it-1), basis_vec(my_it-1));
+            timing_pop();
+            timing_push("gmres_matmul");
             /* Apply the operator the current basis vector */
             ops->matrix_multiply(basis_vec(my_it-1),resid_vec(my_it));
+            timing_pop();
 //            cout << resid_vec[my_it];
             /* Grahm-Schmidt orthogonalization */
+            timing_push("gmres_dot");
             for (int k = 1; k <= my_it; k++) {
                double dot = ops->resid_dot(resid_vec(k-1),resid_vec(my_it));
                //cout << "**" << dot << "**\n";
@@ -295,8 +310,10 @@ template <class Controller> class GMRES_Solver {
             ops->resid_scale(resid_vec(my_it),1/norm);
             //cout << resid_vec[my_it];
             hess(my_it+1,my_it) = norm;
+            timing_pop();
 
             /* Now, solve the least-squares problem with LAPACK */
+            timing_push("gmres_hess");
             {
                /* LAPACK overwrites the matrix, so copy */
 //               std::cerr.precision(8);
@@ -322,6 +339,7 @@ template <class Controller> class GMRES_Solver {
 //               std::cerr << rhs_vec;
                remaining_error = fabs(rhs_vec(my_it+1));
             }
+            timing_pop();
 //            if (abs(rhs_vec(my_it)) < 1e-14*max(abs(rhs_vec))) {
                /* If the last rhs vector is much smaller than the maximum,
                   we've either stagnated with convergence or we're running into

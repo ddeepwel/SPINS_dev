@@ -4,6 +4,7 @@
 #include "Par_util.hpp"
 #include "T_util.hpp"
 #include <stdio.h>
+#include "timing.hpp"
 
 using namespace Transformer;
 namespace TArrayn {
@@ -135,6 +136,7 @@ namespace TArrayn {
    /* Private function to save boilerplate of calculating d/d[abc] with the
       right kind of transform */
    void Grad::calculate_d(S_EXP type, Trans1D * tform, blitz::Array<double,3> * restrict dest) {
+      timing_push("grad_deriv");
       switch(type) {
          case COSINE:
             deriv_dct(*my_array,*tform,*dest);
@@ -152,6 +154,7 @@ namespace TArrayn {
             fprintf(stderr,"Invalid expansion type (%d) in grad!\n",type);
             abort();
       }
+      timing_pop();
    }
 
    void Grad::do_diff(DTArray * restrict dx_out, Dimension inDim) {

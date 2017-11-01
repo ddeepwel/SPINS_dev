@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <complex>
+#include "timing.hpp"
 
 using namespace std;
 using namespace blitz;
@@ -182,8 +183,10 @@ void Transposer<T>::transpose(Array<T,3> & source, Array<T,3> & dest) {
    // Pointers to indirect the source and dest arrays, if we need to use
    // temporaries
    /* First, if we only have one processor, just copy */
+   timing_push("transpose");
    if (num_proc == 1) {
       dest = source;
+      timing_pop();
       return;
    }
    Array<T,3> * source_pointer, * dest_pointer; 
@@ -237,6 +240,7 @@ void Transposer<T>::transpose(Array<T,3> & source, Array<T,3> & dest) {
    if (&dstarray != &dest) {
       dest = dstarray;
    }
+   timing_pop();
 }
 template <class T>
 void Transposer<T>::back_transpose(Array<T,3> & r_source, Array<T,3> & r_dest) {
@@ -248,8 +252,10 @@ void Transposer<T>::back_transpose(Array<T,3> & r_source, Array<T,3> & r_dest) {
       rever_transpose, with r_source (reverse source) and r_dest (reverse destination) */
 
    /* First, if we only have one processor, just copy */
+   timing_push("transpose");
    if (num_proc == 1) {
       r_dest = r_source;
+      timing_pop();
       return;
    }
    // Pointers to indirect the source and dest arrays, if we need to use
@@ -311,6 +317,7 @@ void Transposer<T>::back_transpose(Array<T,3> & r_source, Array<T,3> & r_dest) {
    if (&dstarray != &r_dest) {
       r_dest = dstarray;
    }
+   timing_pop();
 }
 
 template<class T>

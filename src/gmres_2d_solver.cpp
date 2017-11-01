@@ -5,6 +5,7 @@
 #include "Parformer.hpp"
 #include "gmres_2d_solver.hpp"
 #include "Par_util.hpp"
+#include "timing.hpp"
 
 // private interface for gmres-solving class
 #include "gmres_2d_solver_impl.hpp"
@@ -823,7 +824,9 @@ void Cheb_2dmg::precondition(fbox * & rhs, ubox * & soln) {
 //   SYNC(cerr << *r2d;cerr.flush());
 //   fprintf(stderr,"Mean condition: %g\n",rhs->mean);
    //fprintf(stderr,"Precond: max rhs %g\n",max(abs(*(rhs->gridbox))));
+   timing_push("mg_cycle");
    mg_precond->cycle(CYCLE_F,*r2d,*s2d, rhs->mean,soln->sigma,0,1,2);
+   timing_pop();
    //mg_precond->cycle(CYCLE_V,*r2d,*s2d, rhs->mean,soln->sigma,1,0,0);
    //fprintf(stderr,"Precond: max soln %g\n",max(abs(*s2d)));
 

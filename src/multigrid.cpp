@@ -6,9 +6,11 @@
 #include <blitz/tinyvec-et.h>
 
 #include "umfpack.h"
+#include "timing.hpp"
 
 using namespace blitz;
 using namespace std;
+
 
 //#define COARSE_GRID_SIZE 512
 #define COARSE_GRID_SIZE 8
@@ -155,6 +157,7 @@ void MG_Solver::rebalance_line(Array<double,1> & orig, Array<double,1> & balance
    if (balance.extent(firstDim) > 0) balance = b_2d(Range::all(),0);
 }
 void MG_Solver::rebalance_array(Array<double,2> & orig, Array<double,2> & balance, MPI_Comm c, BalanceGroup btype) {
+   timing_push("rebalance");
    int o_lbound = orig.lbound(firstDim);
    int o_ubound = orig.ubound(firstDim);
    int b_lbound = balance.lbound(firstDim);
@@ -248,8 +251,11 @@ void MG_Solver::rebalance_array(Array<double,2> & orig, Array<double,2> & balanc
 
    assert(orig.size() == s_total && balance.size() == r_total);
    
+   timing_push("rebalance_mpi");
    MPI_Alltoallv(orig_data,s_counts,s_displs,MPI_DOUBLE,
          balance.data(),r_counts,r_displs,MPI_DOUBLE,c);
+   timing_pop(); // rebalance_mpi
+   timing_pop(); // rebalance
    // And done
 }
 void MG_Solver::set_x_symmetry(SYM_TYPE s) {
@@ -521,6 +527,69 @@ MG_Solver::MG_Solver(Array<double,1> xvals, blitz::Array<double,1> zvals,
 }
   
 /* Line solve */
+#if 1
+void line_solve(Array<double,1> & u, Array<double,1> & f,
+      Array<double,1> & A, Array<double,1> & B,
+      Array<double,1> & C, double a0, double a1, 
+      double b0, double b1, Array<double,2> & Dz,
+      Array<double,2> & Dzz) {
+   /* The objective here is to solve the line operator as a tridiangonal banded
+      matrix.  While LAPACK has solvers for this, timing suggests that the basic
+      banded solver is much slower than expected.  Problems that arise in SPINS
+      should not be difficult ones that require partial pivoting.  The problem
+      to solve is:
+          A(z)*Dzz*u + B(z)*dz*u + C(z)*u = f(z), with
+          a0*u + b0*Dz*u = f0 @ z=0 (bottom) and
+          a1*u + b1*Dz*u = f1 @ z=1 (top) */
+
+   timing_push("line_solve");
+
+   // Build the band matrix itself, re-using the LAPACK formulation
+   blitz::firstIndex ii; 
+   blitz::Range all = Range::all();
+   static Array<double,1> an(u.extent(firstDim)), bn(u.extent(firstDim)), cn(u.extent(firstDim));
+   int top = u.ubound(firstDim);
+   an = 0; bn = 0; cn = 0;
+   /* Set the band matrix based on our input parameters */
+   // Main diagonal
+   bn(all) = A*Dzz(all,1) + B*Dz(all,1) + C;
+   // Subdiagonal
+   an(all) = A*Dzz(all,0) + B*Dz(all,0);
+   // Superdiagonal
+   cn(all) = A*Dzz(all,2) + B*Dz(all,2);
+
+   /* BC's */
+
+   /* Bottom -- a0*u+b0*Dz*u */
+   bn(0) = a0 + b0*Dz(0,1); // Main diagonal from Dz
+   cn(0) = b0*Dz(0,2); // Superdiagonal from Dz
+   an(0) = 0;
+
+   /* Top -- a1*u + b1*Dz*u */
+   bn(top) = a1 + b1*Dz(top,1);
+   an(top) = b1*Dz(top,0); // Subdiagonal from Dz
+   cn(top) = 0;
+
+   // Thomas algorithm, via Wikipedia, note base-zero indexing
+
+   cn(0) = cn(0)/bn(0);
+   u(0) = f(0)/bn(0); // Use u for d', which will be overwritten by the final sol'n
+
+   for (int i = 1; i < top; i++) {
+      cn(i) = cn(i)/(bn(i)-an(i)*cn(i-1));
+      u(i) = (f(i) - an(i)*u(i-1))/(bn(i)-an(i)*cn(i-1));
+   }
+
+   u(top) = (f(top)-an(top)*u(top-1))/(bn(top)-an(top)*cn(top-1));
+
+   // Back substitution
+   for (int i = top-1; i >= 0; i--) {
+      u(i) = u(i) - cn(i)*u(i+1);
+   }
+
+   timing_pop(); // line_solve
+}
+#else
 void line_solve(Array<double,1> & u, Array<double,1> & f,
       Array<double,1> & A, Array<double,1> & B,
       Array<double,1> & C, double a0, double a1, 
@@ -539,6 +608,7 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
    /* Allocate the operator as static, since it's large-ish */
 //   cout << "Solving: A: " << A << "B: " << B << "C: " << C << "f: " << f;
 //   fprintf(stdout,"BCs: %f %f, %f %f\n",a0,a0,b0,b1);
+   timing_push("line_solve");
    blitz::firstIndex ii; blitz::secondIndex jj;
    static Array<double,2> band_matrix(4,u.extent(firstDim),blitz::columnMajorArray);
    band_matrix = 0;
@@ -575,6 +645,7 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
    u = f;
    // LAPACK call
 //   cout << "Band matrix: " << band_matrix;
+   timing_push("line_solve_lapack");
    dgbsv_(&N, &KL, &KU, &NRHS, band_matrix.data(), &LDAB, IPIV, u.data(), &LDB, &INFO);
 //   cout << "Returning u:" << u << "Info " << INFO << endl;
    if (INFO != 0) {
@@ -583,8 +654,11 @@ void line_solve(Array<double,1> & u, Array<double,1> & f,
       cerr << band_matrix;
       cerr << f;
    }
+   timing_pop();
    assert(INFO == 0);
+   timing_pop();
 }
+#endif
 
 /* Copy coefficients to the local object, and coarsen for the subproblem */
 void MG_Solver::problem_setup(Array<double,2> & Uxx, Array<double,2> & Uzz,
@@ -714,6 +788,7 @@ void MG_Solver::apply_operator(Array<double,2> & u, Array<double,2> & f) {
    /* Assuming that the x-array is properly load balanced for our communicator,
       apply the operator A*x = f */
    /* Local arrays for left and right x lines, for parallel communication */
+   timing_push("apply_operator");
    Array<double,1> uin_left(size_z) ,  uin_right(size_z) ;
    uin_left = -9e9; uin_right = -9e9;
 
@@ -739,12 +814,14 @@ void MG_Solver::apply_operator(Array<double,2> & u, Array<double,2> & f) {
       }
       /* Now, send left points, and receive right points */
 //      fprintf(stderr,"%d sending left (%d, %d)\n",myrank,lefty,righty);
+      timing_push("apply_op_mpi");
       MPI_Sendrecv(&u(u.lbound(firstDim),0),size_z,MPI_DOUBLE,lefty,0,
             uin_right.data(),size_z,MPI_DOUBLE,righty,0,my_comm,&ignoreme);
       /* And vice versa -- send right, receive left */
 //      fprintf(stderr,"%d sending right (%d, %d)\n",myrank,righty,lefty);
       MPI_Sendrecv(&u(u.ubound(firstDim),0),size_z,MPI_DOUBLE,righty,0,
             uin_left.data(),size_z,MPI_DOUBLE,lefty,0,my_comm,&ignoreme);
+      timing_pop();
 //      fprintf(stderr,"%d received:\n");
 //      fprintf(stderr,"%d done\n",myrank);
    }
@@ -935,6 +1012,7 @@ void MG_Solver::apply_operator(Array<double,2> & u, Array<double,2> & f) {
             u(i,j-1)*uz_top(i)*Dz(j,0) + u(i-1,j)*ux_top(i)*Dx(i,0);
       }
    }
+   timing_pop();
 }
 
 
@@ -959,6 +1037,7 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
       an even number of points).
 
       This is low-hanging fruit for simultaneous communication and computation. */
+   timing_push("redblack");
    Array<double,1> ul_right(size_z), // Array for receiving right neighbour
                u_coef(size_z), // coefficient for the u term
                uz_coef(size_z), // ux_term
@@ -1001,8 +1080,10 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
       left_neighbour = MPI_PROC_NULL;
    }
    /* Set up the nonblocking call to receive data from the right neighbour */
+   timing_push("redblack_mpi");
    MPI_Irecv(ul_right.data(),size_z,MPI_DOUBLE,right_neighbour,
          MPI_ANY_TAG,my_comm,&rec_req);
+   timing_pop();
 
    
    /* Solve the red lines */
@@ -1117,11 +1198,13 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
 
       /* If we've just computed the local lbound, we want to send
          it to the left neighbour */
+      timing_push("redblack_mpi");
       if (i == local_x_lbound) {
 //         fprintf(stderr,"%d is lbound on processor %d, sending.  First index %g\n",i,myrank,u(i,0));
          MPI_Isend(&u(local_x_lbound,0),size_z,MPI_DOUBLE,left_neighbour,
                0, my_comm,&send_req);
       }
+      timing_pop();
    }
    // Now, black points, treating the last line specially
    for (int i = local_x_lbound+1; i <= local_x_ubound-1; i+= 2) {
@@ -1176,7 +1259,9 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
 
 
    /* Make sure we've received the upper bound by now */
+   timing_push("redblack_mpi");
    MPI_Wait(&rec_req,&ignoreme);
+   timing_pop();
 //   for (int i = 0; i < nproc; i++)  {
 //      if (i == myrank) cout << "Process " << myrank << " received right neighbour" << ul_right;
 //      MPI_Barrier(my_comm);
@@ -1186,7 +1271,10 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
    if (local_x_ubound % 2 == 0) {
       // Make sure the send completed -- this should be a null op, but
       // it's nice to clear out the request object anyway
+      timing_push("redblack_mpi");
       MPI_Wait(&send_req,&ignoreme);
+      timing_pop();
+      timing_pop(); // also pop the redblack timing stack before this irregular return
       return; 
    }
 
@@ -1285,7 +1373,10 @@ void MG_Solver::do_redblack(blitz::Array<double,2> & f, blitz::Array<double,2> &
    u(i,Range::all()) = u_line;
 
    // Make sure the send completed
+   timing_push("redblack_mpi");
    MPI_Wait(&send_req,&ignoreme);
+   timing_pop();
+   timing_pop();
 //   fprintf(stdout,"Exiting Redblack %d/%d\n",myrank,nproc);
 }
 
@@ -1781,6 +1872,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
    Array<double,2> defect(f.lbound(),f.extent()), correction(u.lbound(),u.extent());
    //fprintf(stderr,"_cycle: mean condition %g\n",extra_in);
 //   if (master()) fprintf(stderr,"Call to _cycle[%d]\n",size_x);
+   //timing_push("_cycle");
    if (coarsest_level) {
       // Coarse-grid solve
       if (myrank != 0) return;
@@ -1830,10 +1922,12 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
             u_ptr = u.data();
             f_ptr = f.data();
          }
+         timing_push("coarse solve");
          int retval = umfpack_di_solve(sys,A_cols,A_rows,A_double,
                               u_ptr, f_ptr,
                               numeric_factor,
                               Control,Info);
+         timing_pop();
          assert(!retval);
          if (indefinite_problem) {
 //            fprintf(stderr,"CG: True u\n");
@@ -1924,19 +2018,26 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
 //         SYNC(cerr << coarse_f);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"Recursive(V) solve\n");
+            //timing_pop(); // pop _cycle to avoid recusive nesting
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   coarse_extra_in,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"Recursive(V) solve finished\n");
          } else {
             //fprintf(stderr,"No coarse solve\n");
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
 //         if (master()) fprintf(stderr,"V[%d] local coarse correction\n",size_x);
 //         SYNC(cerr << coarse_u);
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+         }
          defect = defect-f-coarse_extra_out;
          u = u+correction;
          extra_out = coarse_extra_out;
@@ -1952,20 +2053,27 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve begin\n",size_x);
+            //timing_pop(); // pop _cycle
             coarse_solver->_cycle(CYCLE_F,coarse_f,coarse_u,
                   extra_in,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"F[%d] Recursive(F) solve end\n",size_x);
          } else {
 //            fprintf(stderr,"No coarse solve\n");
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
 //         if (master()) {
 //            fprintf(stderr,"coarseu: %d - %d\n",coarse_u.lbound(firstDim),coarse_u.ubound(firstDim));
 //         }
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
 //         cout << "CG: New correction: " << correction;
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+         }
 //         SYNC(cerr << f; cerr.flush()); MPI_Finalize(); exit(1);
          defect = defect-f-coarse_extra_out;
          u = u+correction;
@@ -1990,15 +2098,22 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
          rebalance_array(local_coarse_2d,coarse_f,my_comm,FCoarse);
          if (coarse_solver) {
 //            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve begin\n",size_x);
+            //timing_pop(); // _cycle
             coarse_solver->_cycle(CYCLE_V,coarse_f,coarse_u,
                   0,coarse_extra_out,pre,mid,post);
+            //timing_push("_cycle");
 //            if (master()) fprintf(stderr,"F[%d] Recursive(V) solve end\n",size_x);
          } else {
          }
+         timing_push("cycle_sync");
          MPI_Bcast(&coarse_extra_out,1,MPI_DOUBLE,0,my_comm);
+         timing_pop();
          rebalance_array(coarse_u,local_coarse_2d,my_comm,UCoarse);
          interpolate_grid(correction);
-         apply_operator(correction,f);
+         {
+            double now = MPI_Wtime();
+            apply_operator(correction,f);
+         }
          defect = defect-f-coarse_extra_out;
          u = u+correction;
 //         fprintf(stderr,"F(2)[%d] average: %g vs %g\n",size_x,pvsum(u,my_comm)/(size_x*size_z),extra_in);
@@ -2025,6 +2140,7 @@ void MG_Solver::_cycle(CYCLE_TYPE cycle, Array<double,2> & f, Array<double,2> & 
  //  SYNC(cerr << myrank << ": " << u(u.ubound(firstDim),0) << endl;cerr.flush();)
 
    // Et voila, return
+   //timing_pop(); // _cycle
    return;
 }
 
@@ -2034,6 +2150,7 @@ void MG_Solver::build_sparse_operator() {
    // than having to deal with "influences by a grid point" one at a time.
 #define cell_index(a,b) (((a)*size_z)+(b)) 
 
+   timing_push("coarse_factor");
    assert(nproc == 1);
 //   fprintf(stderr,"Sparse building: (%dx%d) %d %d %d\n",size_x,size_z,int(any_dxz),int(bc_tangent),int(bc_normal));
 //   double now = MPI_Wtime();
@@ -2919,6 +3036,7 @@ void MG_Solver::build_sparse_operator() {
    }
 //   double later = MPI_Wtime();
 //   fprintf(stderr,"Coarse operator construction took %g sec\n",later-now);
+   timing_pop(); // coarse_factor
 
 }
 

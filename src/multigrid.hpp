@@ -8,6 +8,10 @@
 /* Header file for our required 2D multigrid solver, operating on a (split) grid
    with the numerical Jacobian entries (from the spectral model) providing varying
    coefficients */
+
+extern double coarse_solve_time, redblack_time, apply_op_time;
+extern int coarse_solve_count, redblack_count, apply_op_count;
+
 enum SYM_TYPE {
    SYM_NONE=0, // No symmetry
    SYM_PERIODIC, // Periodic

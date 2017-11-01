@@ -14,6 +14,9 @@ OPTIM?=true
 # longer for compilation
 SLOW_OPTIM?=false
 
+# Compile with instrumentation support for timing
+TIMINGS?=false
+
 # If MPICXX isn't separately defined, then set it to be the same
 # as CXX
 ifeq ($(strip $(MPICXX)),)
@@ -36,6 +39,11 @@ ifeq ($(OPTIM),true)
    endif
 endif
 
+ifeq ($(TIMINGS),true)
+   CFLAGS:=$(CFLAGS) -DTIMING_ENABLE
+endif
+
+
 INCLUDE_DIRS := -I../include $(MPI_INCDIR) $(LAPACK_INCDIR) $(BLITZ_INCDIR) $(FFTW_INCDIR) $(UMF_INCDIR)
 CFLAGS := $(CFLAGS) $(INCLUDE_DIRS)
 
@@ -57,7 +65,7 @@ NSIntegrator.o: NSIntegrator.cpp NSIntegrator_impl.cc
 tests/test%.o: tests/test%.cpp
 	$(MPICXX) $(CFLAGS) -o $@ -c $<
 
-tests/test%_x: tests/test%.o tests/test%.src.o TArray.o Parformer.o T_util.o  ESolver.o Timestep.o NSIntegrator.o BaseCase.o Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o
+tests/test%_x: tests/test%.o tests/test%.src.o TArray.o Parformer.o T_util.o  ESolver.o Timestep.o NSIntegrator.o BaseCase.o Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o 
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS) 
 
 cases/%.o: cases/%.cpp NSIntegrator_impl.cc NSIntegrator.hpp
@@ -70,11 +78,11 @@ derek_x: derek.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o Splits.o Par
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cases/%.x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o \
-           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o Sorter.o
+           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o timing.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cases/%_x: cases/%.o cases/%.src.o TArray.o T_util.o Parformer.o ESolver.o Timestep.o NSIntegrator.o BaseCase.o \
-           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o Sorter.o
+           Science.o Splits.o Par_util.o Split_reader.o gmres.o gmres_1d_solver.o gmres_2d_solver.o grad.o multigrid.o Options.o timing.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 tests/test%.src.c: tests/test%.cpp CaseFileSource.c
@@ -89,5 +97,7 @@ cases/%.src.c: cases/%.cpp CaseFileSource.c
 
 %.o: %.cpp	*.hpp
 	$(MPICXX) $(CFLAGS) -o $@ -c $< 
+
+print-%  : ; @echo $* = $($*)
 
 .SECONDARY:
