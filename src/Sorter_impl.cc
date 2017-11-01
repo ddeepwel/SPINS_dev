@@ -1,5 +1,5 @@
 #ifndef SORTER_HPP
-   #error "Sorter_impl.cc may only be #included in Sorter.hpp
+   #error "Sorter_impl.cc may only be #included in Sorter.hpp"
 #endif
 
 #ifndef SORTER_IMPL_CC
