@@ -14,9 +14,15 @@
    This model does require that timing be called in a predictable way, such
    that timing_pop is called before any possible exit from the code path.*/
 
-void timing_push(const char * name);
+#ifndef TIMING_ENABLE // If timing code is not enabled, define the respective functions as no-ops 
 
+#define timing_push(x)
+#define timing_pop()
+
+#else
+void timing_push(const char * name);
 void timing_pop();
+#endif
 
 void timing_stack_report();
 

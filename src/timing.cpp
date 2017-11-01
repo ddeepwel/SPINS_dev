@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <stdio.h>
 
+#ifdef TIMING_ENABLE
 // Structure for information related to a single timing invocation
 struct timing_element; 
 
@@ -96,3 +97,11 @@ void timing_stack_report(){
       timing_stack_recurse(root[i],0);
    }
 }
+
+#else
+
+void timing_stack_report() {
+   fprintf(stderr,"Timing was not enabled for this build of SPINS.\n");
+}
+
+#endif

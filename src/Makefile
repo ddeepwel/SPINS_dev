@@ -14,6 +14,9 @@ OPTIM?=true
 # longer for compilation
 SLOW_OPTIM?=false
 
+# Compile with instrumentation support for timing
+TIMINGS?=false
+
 # If MPICXX isn't separately defined, then set it to be the same
 # as CXX
 ifeq ($(strip $(MPICXX)),)
@@ -35,6 +38,11 @@ ifeq ($(OPTIM),true)
       LDFLAGS:=$(LDFLAGS) $(EXTRA_OPTIM_LDFLAGS)
    endif
 endif
+
+ifeq ($(TIMINGS),true)
+   CFLAGS:=$(CFLAGS) -DTIMING_ENABLE
+endif
+
 
 INCLUDE_DIRS := -I../include $(MPI_INCDIR) $(LAPACK_INCDIR) $(BLITZ_INCDIR) $(FFTW_INCDIR) $(UMF_INCDIR)
 CFLAGS := $(CFLAGS) $(INCLUDE_DIRS)
@@ -87,5 +95,7 @@ cases/%.src.c: cases/%.cpp CaseFileSource.c
 
 %.o: %.cpp	*.hpp
 	$(MPICXX) $(CFLAGS) -o $@ -c $< 
+
+print-%  : ; @echo $* = $($*)
 
 .SECONDARY:
