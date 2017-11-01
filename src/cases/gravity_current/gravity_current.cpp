@@ -296,19 +296,21 @@ class userControl : public BaseCase {
                     add_diagnostic("Max_diss", max_diss, header, line);
                     add_diagnostic("Diss_tot", diss_tot, header, line);
                 }
-                if (compute_enstrophy) {
+                if (Nx > 1 && Nz > 1 && compute_enstrophy) {
                     add_diagnostic("Max_vort_y", max_vort_y,    header, line);
                     add_diagnostic("Enst_y_tot", enst_y_tot,    header, line);
                 }
                 if (Ny > 1 || rot_f != 0) {
                     add_diagnostic("Max_v", max_v,  header, line);
                     add_diagnostic("KE_y", ke_y,    header, line);
-                    if (compute_enstrophy) {
-                        add_diagnostic("Enst_x_tot", enst_x_tot,    header, line);
-                        add_diagnostic("Max_vort_x", max_vort_x,    header, line);
-                        add_diagnostic("Enst_z_tot", enst_z_tot,    header, line);
-                        add_diagnostic("Max_vort_z", max_vort_z,    header, line);
-                    }
+                }
+                if (Ny > 1 && Nz > 1 && compute_enstrophy) {
+                    add_diagnostic("Enst_x_tot", enst_x_tot,    header, line);
+                    add_diagnostic("Max_vort_x", max_vort_x,    header, line);
+                }
+                if (Nx > 1 && Ny > 1 && compute_enstropy) {
+                    add_diagnostic("Enst_z_tot", enst_z_tot,    header, line);
+                    add_diagnostic("Max_vort_z", max_vort_z,    header, line);
                 }
 
                 // Write to file
