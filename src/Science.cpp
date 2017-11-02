@@ -296,7 +296,7 @@ bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
 // Compute Background Potential Energy (BPE)
 void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
         int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g,
-        double rho_0, int iter, bool mapped, Array<double,1> hill, bool dimensional_rho) {
+        double rho_0, int iter, bool dimensional_rho, bool mapped, Array<double,1> hill) {
     // Tensor variables for indexing
     blitz::firstIndex ii;
     blitz::secondIndex jj;
