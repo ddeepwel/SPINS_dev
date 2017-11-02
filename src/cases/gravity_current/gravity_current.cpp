@@ -62,6 +62,7 @@ double perturb;                 // Initial velocity perturbation
 bool compute_enstrophy;         // Compute enstrophy?
 bool compute_dissipation;       // Compute dissipation?
 bool compute_BPE;               // Compute background potential energy?
+bool compute_internal_to_BPE;   // Compute BPE gained from internal energy?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -221,26 +222,28 @@ class userControl : public BaseCase {
             }
             double pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
-            double BPE_tot;
+            double BPE_tot = 0;
             if (compute_BPE) {
                 compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, Lz, g, rho_0, iter);
             }
+            // Conversion from internal energy to background potential energy
+            double phi_i = 0;
+            if (compute_internal_to_BPE) {
+                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
+            }
             // viscous dissipation
             double diss_tot = 0;
-            double max_diss;
+            double max_diss = 0;
             if (compute_dissipation) {
                 dissipation(*temp1, u, v, w, gradient_op, grid_type, Nx, Ny, Nz, mu);
                 max_diss = psmax(max(*temp1));
                 diss_tot = pssum(sum((*temp1)*
                             (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
-            // Conversion from internal energy to background potential energy
-            double phi_i;
-            compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
             // Vorticity / Enstrophy
-            double max_vort_x, enst_x_tot;
-            double max_vort_y, enst_y_tot;
-            double max_vort_z, enst_z_tot;
+            double max_vort_x = 0, enst_x_tot = 0;
+            double max_vort_y = 0, enst_y_tot = 0;
+            double max_vort_z = 0, enst_z_tot = 0;
             if (compute_enstrophy) {
                 // x-vorticity
                 if (Ny > 1 and Nz > 1) {
@@ -270,7 +273,7 @@ class userControl : public BaseCase {
             double max_w = psmax(max(abs(w)));
             double max_vel = psmax(max(sqrt(u*u + v*v + w*w)));
             double max_rho = psmax(max(abs(*tracers[RHO])));
-            // total mass
+            // total mass (tracers[RHO] is non-dimensional density)
             double mass = pssum(sum(rho_0*(1+(*tracers[RHO]))*
                         (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
 
@@ -280,37 +283,43 @@ class userControl : public BaseCase {
                 add_diagnostic("Iter", iter,            header, line);
                 add_diagnostic("Clock_time", comp_duration, header, line);
                 add_diagnostic("Time", time,            header, line);
-                add_diagnostic("Max_u", max_u,          header, line);
-                add_diagnostic("Max_w", max_w,          header, line);
                 add_diagnostic("Max_vel", max_vel,      header, line);
                 add_diagnostic("Max_density", max_rho,  header, line);
                 add_diagnostic("Mass", mass,            header, line);
-                add_diagnostic("KE_x", ke_x,            header, line);
-                add_diagnostic("KE_z", ke_z,            header, line);
                 add_diagnostic("PE_tot", pe_tot,        header, line);
-                add_diagnostic("BPE_from_int", phi_i,   header, line);
                 if (compute_BPE) {
                     add_diagnostic("BPE_tot", BPE_tot,  header, line);
                 }
-                if (compute_dissipation) {
-                    add_diagnostic("Max_diss", max_diss, header, line);
-                    add_diagnostic("Diss_tot", diss_tot, header, line);
+                if (compute_internal_to_BPE) {
+                    add_diagnostic("BPE_from_int", phi_i,   header, line);
                 }
-                if (Nx > 1 && Nz > 1 && compute_enstrophy) {
-                    add_diagnostic("Max_vort_y", max_vort_y,    header, line);
-                    add_diagnostic("Enst_y_tot", enst_y_tot,    header, line);
+                if (compute_dissipation) {
+                    add_diagnostic("Max_diss", max_diss,    header, line);
+                    add_diagnostic("Diss_tot", diss_tot,    header, line);
+                }
+                if (Nx > 1) {
+                    add_diagnostic("Max_u", max_u,  header, line);
+                    add_diagnostic("KE_x", ke_x,    header, line);
                 }
                 if (Ny > 1 || rot_f != 0) {
                     add_diagnostic("Max_v", max_v,  header, line);
                     add_diagnostic("KE_y", ke_y,    header, line);
                 }
+                if (Nz > 1) {
+                    add_diagnostic("Max_w", max_w,  header, line);
+                    add_diagnostic("KE_z", ke_z,    header, line);
+                }
                 if (Ny > 1 && Nz > 1 && compute_enstrophy) {
-                    add_diagnostic("Enst_x_tot", enst_x_tot,    header, line);
-                    add_diagnostic("Max_vort_x", max_vort_x,    header, line);
+                    add_diagnostic("Enst_x_tot", enst_x_tot, header, line);
+                    add_diagnostic("Max_vort_x", max_vort_x, header, line);
+                }
+                if (Nx > 1 && Nz > 1 && compute_enstrophy) {
+                    add_diagnostic("Enst_y_tot", enst_y_tot, header, line);
+                    add_diagnostic("Max_vort_y", max_vort_y, header, line);
                 }
                 if (Nx > 1 && Ny > 1 && compute_enstrophy) {
-                    add_diagnostic("Enst_z_tot", enst_z_tot,    header, line);
-                    add_diagnostic("Max_vort_z", max_vort_z,    header, line);
+                    add_diagnostic("Enst_z_tot", enst_z_tot, header, line);
+                    add_diagnostic("Max_vort_z", max_vort_z, header, line);
                 }
 
                 // Write to file
@@ -450,6 +459,8 @@ int main(int argc, char ** argv) {
     add_option("compute_enstrophy",&compute_enstrophy,true,"Calculate enstrophy?");
     add_option("compute_dissipation",&compute_dissipation,true,"Calculate dissipation?");
     add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
+    add_option("compute_internal_to_BPE",&compute_internal_to_BPE,true,
+            "Calculate BPE gained from internal energy?");
 
     option_category("Filter options");
     add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
