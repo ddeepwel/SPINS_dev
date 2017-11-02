@@ -308,7 +308,7 @@ class userControl : public BaseCase {
                     add_diagnostic("Enst_x_tot", enst_x_tot,    header, line);
                     add_diagnostic("Max_vort_x", max_vort_x,    header, line);
                 }
-                if (Nx > 1 && Ny > 1 && compute_enstropy) {
+                if (Nx > 1 && Ny > 1 && compute_enstrophy) {
                     add_diagnostic("Enst_z_tot", enst_z_tot,    header, line);
                     add_diagnostic("Max_vort_z", max_vort_z,    header, line);
                 }
