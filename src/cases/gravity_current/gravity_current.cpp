@@ -63,6 +63,7 @@ bool compute_enstrophy;         // Compute enstrophy?
 bool compute_dissipation;       // Compute dissipation?
 bool compute_BPE;               // Compute background potential energy?
 bool compute_internal_to_BPE;   // Compute BPE gained from internal energy?
+bool write_pressure;            // Write the pressure field?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -75,7 +76,7 @@ class userControl : public BaseCase {
         // Grid arrays
         Array<double,1> xx, yy, zz;
 
-        // arrays and operators for derivatives
+        // Arrays and operators for derivatives
         Grad * gradient_op;
         DTArray *temp1;
 
@@ -142,7 +143,7 @@ class userControl : public BaseCase {
                         for (int k = u.lbound(thirdDim); k <= u.ubound(thirdDim); k++) {
                             u(i,j,k) += perturb*rnd.random();
                             w(i,j,k) += perturb*rnd.random();
-                            if ( Ny > 1 )
+                            if (Ny > 1 || rot_f != 0)
                                 v(i,j,k) += perturb*rnd.random();
                         }
                     }
@@ -212,7 +213,7 @@ class userControl : public BaseCase {
                 ke_x = pssum(sum(0.5*rho_0*(u*u)*
                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
-            if ( Ny > 1 || rot_f != 0) {
+            if (Ny > 1 || rot_f != 0) {
                 ke_y = pssum(sum(0.5*rho_0*(v*v)*
                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
             }
@@ -341,6 +342,8 @@ class userControl : public BaseCase {
                 if (Ny > 1 || rot_f != 0)
                     write_array(v,"v",plot_number);
                 write_array(*tracers[RHO],"rho",plot_number);
+                if (write_pressure)
+                    write_array(pressure,"p",plot_number);
                 // update next plot time
                 next_plot = next_plot + plot_interval;
 
@@ -461,6 +464,7 @@ int main(int argc, char ** argv) {
     add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
     add_option("compute_internal_to_BPE",&compute_internal_to_BPE,true,
             "Calculate BPE gained from internal energy?");
+    add_option("write_pressure",&write_pressure,false,"Write the pressure field?");
 
     option_category("Filter options");
     add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
