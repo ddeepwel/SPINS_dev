@@ -70,9 +70,6 @@ namespace NSIntegrator {
 
             double desttime = times[0] + the_timestep;
 
-            // Analyze the initial conditions
-            usercode->analysis(times[0],us[0],vs[0],ws[0],tracers_now,pressure);
-
             /* Now, take timesteps until we reach our one-timestep destination*/
             
             bool starting_step = false;
@@ -87,6 +84,9 @@ namespace NSIntegrator {
                   total time integration error.  So, if we're starting up,
                   we take a small timestep and progressively double it. */
                if (times[-1] == times[-2]) {
+                  // Analyze the initial conditions
+                  usercode->analysis(times[0],us[0],vs[0],ws[0],tracers_now,pressure);
+
                   /* Startup, so take a tiny timestep */
                   my_step = the_timestep/64;
                   starting_step = true;
