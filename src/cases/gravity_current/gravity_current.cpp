@@ -446,7 +446,7 @@ int main(int argc, char ** argv) {
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
     add_option("plot_interval",&plot_interval,"Time between writes");
-    add_option("dt_max",&dt_max,"Maximum time step");
+    add_option("dt_max",&dt_max,0,"Maximum time step. Zero value results in the default");
 
     option_category("Restart options");
     add_option("restart",&restarting,false,"Restart from prior output time.");
@@ -523,7 +523,8 @@ int main(int argc, char ** argv) {
         fprintf(stdout,"Time between plots: %g s\n",plot_interval);
         fprintf(stdout,"Initial velocity perturbation: %g\n",perturb);
         fprintf(stdout,"Filter cutoff = %f, order = %f, strength = %f\n",f_cutoff,f_order,f_strength);
-        fprintf(stdout,"Buoyancy frequency squared %g\n",N2_max);
+        fprintf(stdout,"Approx. max buoyancy frequency squared: %g\n",N2_max);
+        fprintf(stdout,"Max time step: %g\n",dt_max);
     }
 
     /* ------------------ Do stuff --------------------- */
