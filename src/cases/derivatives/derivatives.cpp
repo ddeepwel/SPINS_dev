@@ -243,7 +243,7 @@ class userControl : public BaseCase {
                 }
 
                 // Calculate Enstrophy
-                /*if ( do_enstrophy ) {
+                if ( do_enstrophy ) {
                     enstrophy_density(deriv_var, u, v, w, gradient_op, grid_type,
                             Nx, Ny, Nz);
                     double tot_enst = pssum(sum(
@@ -255,6 +255,7 @@ class userControl : public BaseCase {
                     if (master())
                         fprintf(stdout,"Completed the write for enst.%d\n",plotnum);
                 }
+
                 // Calculate Viscous dissipation
                 if ( do_dissipation ) {
                     double mu = visco*rho_0;    // dynamic viscosity
@@ -268,7 +269,7 @@ class userControl : public BaseCase {
                     write_array(deriv_var,"diss",plotnum);
                     if (master())
                         fprintf(stdout,"Completed the write for diss.%d\n",plotnum);
-                }*/
+                }
             }
         }
 

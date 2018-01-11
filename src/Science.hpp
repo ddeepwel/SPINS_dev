@@ -34,6 +34,10 @@ void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTA
 void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
         TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
         TArrayn::Grad * gradient_op, const string * grid_type);
+// Enstrophy density
+void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::DTArray & v,
+        TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
+        const int Nx, const int Ny, const int Nz);
 // Viscous dissipation
 void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,

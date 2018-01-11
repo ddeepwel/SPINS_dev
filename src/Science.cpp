@@ -222,6 +222,32 @@ void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTA
     gradient_op->get_dx(&vortz,true);
 }
 
+void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
+        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type) {
+    // compute each component
+    compute_vort_x(vortx, v, w, gradient_op, grid_type);
+    compute_vort_y(vorty, u, w, gradient_op, grid_type);
+    compute_vort_z(vortz, u, v, gradient_op, grid_type);
+}
+
+// Enstrophy Density: 1/2*(vort_x^2 + vort_y^2 + vort_z^2)
+void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::DTArray & v,
+        TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
+        const int Nx, const int Ny, const int Nz) {
+    // initalize temporary array
+    static DTArray *temp = alloc_array(Nx,Ny,Nz);
+
+    // square vorticity components
+    compute_vort_x(v, w, *temp, gradient_op, grid_type);
+    enst = pow(*temp,2);
+    compute_vort_y(u, w, *temp, gradient_op, grid_type);
+    enst += pow(*temp,2);
+    compute_vort_z(u, v, *temp, gradient_op, grid_type);
+    enst += pow(*temp,2);
+    enst = 0.5*enst;
+}
+
 // Viscous dissipation: 2*mu*e_ij*e_ij
 void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
@@ -278,15 +304,6 @@ void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray
     diss += 2.0*pow(0.5*(*temp),2);
     // multiply by 2*mu
     diss *= 2.0*visco;
-}
-
-void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
-        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
-        TArrayn::Grad * gradient_op, const string * grid_type) {
-    // compute each component
-    compute_vort_x(vortx, v, w, gradient_op, grid_type);
-    compute_vort_y(vorty, u, w, gradient_op, grid_type);
-    compute_vort_z(vortz, u, v, gradient_op, grid_type);
 }
 
 bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
