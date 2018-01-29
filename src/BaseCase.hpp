@@ -167,6 +167,8 @@ class BaseCase {
       template <class T> void add_diagnostic(const string str, const T val,
               string & header, string & line);
       void write_diagnostics(string header, string line, int iter, bool restarting);
+      void write_plot_times(double time, double clock_time, double comp_duration,
+              double avg_write_time, int plot_number, bool restarting);
 
       // Generate an automatic grid for unmapped cases
       virtual void automatic_grid(double MinX, double MinY, double MinZ, 

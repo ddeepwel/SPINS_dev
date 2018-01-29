@@ -365,20 +365,7 @@ class userControl : public BaseCase {
                 avg_write_time = (avg_write_time*(plot_number-restart_sequence-1) 
                         + (clock_time - comp_duration))/(plot_number-restart_sequence);
                 // Print information about plot outputs
-                if (master()) {
-                    // in log file
-                    fprintf(stdout,"*Write time: %.6g. Average write time: %.6g.\n",
-                            clock_time - comp_duration, avg_write_time);
-                    // track in a file
-                    FILE * plottimes_file = fopen("plot_times.txt","a");
-                    assert(plottimes_file);
-                    if ( plot_number==restart_sequence+1 and !restarting )
-                        fprintf(plottimes_file,"Output number, Simulation time (s), "
-                                "Write time (s), Average write time (s)\n");
-                    fprintf(plottimes_file,"%d, %.12f, %.12g, %.12g\n",
-                                plot_number, time, clock_time - comp_duration, avg_write_time);
-                    fclose(plottimes_file);
-                }
+                write_plot_times(time, clock_time, comp_duration, avg_write_time, plot_number, restarting);
             }
 
             // see if close to end of compute time and dump
