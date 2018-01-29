@@ -6,6 +6,7 @@
 #include <blitz/array.h>
 #include "TArray.hpp"
 #include "NSIntegrator.hpp"
+#include "Science.hpp"       // Science content
 
 using namespace TArrayn;
 using namespace NSIntegrator;
@@ -170,6 +171,14 @@ class BaseCase {
       // Generate an automatic grid for unmapped cases
       virtual void automatic_grid(double MinX, double MinY, double MinZ, 
               Array<double,1> *xx=0, Array<double,1> *yy=0, Array<double,1> *zz=0);
+
+      // Surface Stresses
+      void stresses_top(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+              TArrayn::DTArray & Hprime, TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+              const string * grid_type, const double mu, double time, int itercount, bool restarting);
+      void stresses_bottom(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+              TArrayn::DTArray & Hprime, TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+              const string * grid_type, const double mu, double time, int itercount, bool restarting);
 };
 
 #include "BaseCase_impl.cc" // Include the implementation of the add_diagnostic template

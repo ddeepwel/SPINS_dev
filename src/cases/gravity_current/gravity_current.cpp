@@ -6,7 +6,6 @@
 // Required headers
 #include "../../BaseCase.hpp"      // Support file containing default implementations of several functions
 #include "../../Options.hpp"       // config-file parser
-#include "../../Science.hpp"       // Science content
 #include <random/normal.h>         // Blitz random number generator
 
 using namespace ranlib;
@@ -63,6 +62,8 @@ bool compute_enstrophy;         // Compute enstrophy?
 bool compute_dissipation;       // Compute dissipation?
 bool compute_BPE;               // Compute background potential energy?
 bool compute_internal_to_BPE;   // Compute BPE gained from internal energy?
+bool compute_stresses_top;      // Compute top surface stresses?
+bool compute_stresses_bottom;   // Compute bottom surface stresses?
 bool write_pressure;            // Write the pressure field?
 int iter = 0;                   // Iteration counter
 
@@ -191,10 +192,11 @@ class userControl : public BaseCase {
             iter++;
             // Set-up
             if ( iter == 1 ) {
-                if (compute_enstrophy or compute_dissipation) {
+                if ( compute_enstrophy or compute_dissipation or
+                        compute_stresses_top or compute_stresses_bottom ) {
                     temp1 = alloc_array(Nx,Ny,Nz);
                 }
-                // Determine last plot if restarting from the dump case
+                // Determine last plot if restarting from the dump file
                 if (restart_from_dump) {
                     next_plot = (restart_sequence+1)*plot_interval;    
                 }
@@ -332,6 +334,19 @@ class userControl : public BaseCase {
                         max_u,max_v,max_w,max_rho);
             }
 
+            // Top Surface Stresses
+            if ( compute_stresses_top ) {
+                static DTArray & Hprime = *alloc_array(Nx,Ny,1);
+                Hprime = 0*ii + 0*jj;
+                stresses_top(u, v, w, Hprime, *temp1, gradient_op, grid_type, mu, time, iter, restarting);
+            }
+            // Bottom Surface Stresses
+            if ( compute_stresses_bottom ) {
+                static DTArray & Hprime = *alloc_array(Nx,Ny,1);
+                Hprime = 0*ii + 0*jj;
+                stresses_bottom(u, v, w, Hprime, *temp1, gradient_op, grid_type, mu, time, iter, restarting);
+            }
+
             /* Write to disk if at correct time */
             if ((time - next_plot) > -1e-6) {
                 plot_number++;
@@ -446,7 +461,7 @@ int main(int argc, char ** argv) {
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
     add_option("plot_interval",&plot_interval,"Time between writes");
-    add_option("dt_max",&dt_max,0,"Maximum time step. Zero value results in the default");
+    add_option("dt_max",&dt_max,0.0,"Maximum time step. Zero value results in the default");
 
     option_category("Restart options");
     add_option("restart",&restarting,false,"Restart from prior output time.");
@@ -464,6 +479,8 @@ int main(int argc, char ** argv) {
     add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
     add_option("compute_internal_to_BPE",&compute_internal_to_BPE,true,
             "Calculate BPE gained from internal energy?");
+    add_option("compute_stresses_top",   &compute_stresses_top,   false,"Calculate top surfaces stresses?");
+    add_option("compute_stresses_bottom",&compute_stresses_bottom,false,"Calculate bottom surfaces stresses?");
     add_option("write_pressure",&write_pressure,false,"Write the pressure field?");
 
     option_category("Filter options");
@@ -509,7 +526,7 @@ int main(int argc, char ** argv) {
     // Maximum buoyancy frequency (squared) if the initial stratification was stable
     N2_max = g*delta_rho/(2*delta_x);
     // Maximum time step
-    if (dt_max <= 0) {
+    if (dt_max == 0.0) {
         // if dt_max not given in spins.conf, use the buoyancy frequency
         dt_max = 0.5/sqrt(N2_max);
     }
