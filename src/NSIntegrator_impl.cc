@@ -35,6 +35,9 @@ namespace NSIntegrator {
          /* Control framework for a full run.  At the first timestep(s), take
             fractional timesteps to start up. */
       
+          // Analyze the initial conditions
+          usercode->analysis(times[0],us[0],vs[0],ws[0],tracers_now,pressure);
+
          while (times[0] < (fintime - 1e-8*fabs(fintime))) {
             // Since we're not done, we need to take a timestep.
 
@@ -84,9 +87,6 @@ namespace NSIntegrator {
                   total time integration error.  So, if we're starting up,
                   we take a small timestep and progressively double it. */
                if (times[-1] == times[-2]) {
-                  // Analyze the initial conditions
-                  usercode->analysis(times[0],us[0],vs[0],ws[0],tracers_now,pressure);
-
                   /* Startup, so take a tiny timestep */
                   my_step = the_timestep/64;
                   starting_step = true;

@@ -335,7 +335,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     static vector < pair<double, double> > height_width(Nx);
 
     // Stuff to do once at the beginning
-    if (iter == 1) {
+    if (iter == 0) {
         // create array of voxels
         quad3 = alloc_array(Nx,Ny,Nz);
         *quad3 = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);

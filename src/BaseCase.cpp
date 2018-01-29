@@ -413,7 +413,7 @@ void BaseCase::write_diagnostics(string header, string line,
     FILE * diagnos_file = fopen("diagnostics.txt","a");
     assert(diagnos_file);
     // print header
-    if (iter == 1 and !restarting) {
+    if (iter == 0 and !restarting) {
         fprintf(diagnos_file,"%s\n",clean_header.c_str());
     }
     // print the line of values
@@ -487,7 +487,7 @@ void BaseCase::stresses_top(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn:
     if (master()) {
         FILE * stresses_file = fopen("stresses_top.txt","a");
         assert(stresses_file);
-        if ( itercount==1 and !restarting )
+        if ( itercount==0 and !restarting )
             fprintf(stresses_file,"Time, "
                     "Top_tx_tot, Top_tx_abs, Top_ty_tot, Top_ty_abs, Top_ts\n");
         fprintf(stresses_file,"%.17f, "
@@ -533,7 +533,7 @@ void BaseCase::stresses_bottom(TArrayn::DTArray & u, TArrayn::DTArray & v, TArra
     if (master()) {
         FILE * stresses_file = fopen("stresses_bottom.txt","a");
         assert(stresses_file);
-        if ( itercount==1 and !restarting )
+        if ( itercount==0 and !restarting )
             fprintf(stresses_file,"Time, "
                     "Bottom_tx_tot, Bottom_tx_abs, Bottom_ty_tot, Bottom_ty_abs, Bottom_ts\n");
         fprintf(stresses_file,"%.17f, "

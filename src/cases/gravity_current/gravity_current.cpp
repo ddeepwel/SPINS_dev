@@ -188,10 +188,8 @@ class userControl : public BaseCase {
         /* Basic analysis: compute secondary variables, and save fields and diagnostics */
         void analysis(double time, DTArray & u, DTArray & v, DTArray & w,
                 vector<DTArray *> & tracers, DTArray & pressure) {
-            // increase counter
-            iter++;
             // Set-up
-            if ( iter == 1 ) {
+            if ( iter == 0 ) {
                 if ( compute_enstrophy or compute_dissipation or
                         compute_stresses_top or compute_stresses_bottom ) {
                     temp1 = alloc_array(Nx,Ny,Nz);
@@ -388,6 +386,8 @@ class userControl : public BaseCase {
                     plot_number, u, v, w, tracers);
             // Change dump log file if successfully reached final time
             successful_dump(plot_number, final_time, plot_interval);
+            // increase counter
+            iter++;
         }
 
         // User specified variables to dump
