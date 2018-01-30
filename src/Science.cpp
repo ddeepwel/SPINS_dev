@@ -311,7 +311,7 @@ bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
 }
 
 // Compute Background Potential Energy (BPE)
-void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, TArrayn::DTArray & quad3,
         int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g,
         double rho_0, int iter, bool dimensional_rho, bool mapped, Array<double,1> hill) {
     // Tensor variables for indexing
@@ -325,7 +325,6 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
 
     // Arrays for sorting
     static Array<double,3> sort_rho, sort_quad;
-    static DTArray *quad3;     // quadrature weights
     static vector<double> sort_hill(Nx), sort_dx(Nx);
     static vector<double> Lx_partsum(Nx), hillvol_partsum(Nx);
     double *local_vols =   new double[numprocs];
@@ -336,14 +335,8 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
 
     // Stuff to do once at the beginning
     if (iter == 0) {
-        // create array of voxels
-        quad3 = alloc_array(Nx,Ny,Nz);
-        *quad3 = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);
-
         // adjust if mapped
         if ( mapped ) {
-            *quad3 = (*quad3)*(Lz-hill(ii))/Lz;
-
             // information about the hill
             hill_vol = pssum(sum(hill*Ly*(*get_quad_x())));
             hill_max = psmax(max(hill));
@@ -396,7 +389,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     }
 
     // Compute sorted rho
-    sortarray(rho, *quad3, sort_rho, sort_quad);
+    sortarray(rho, quad3, sort_rho, sort_quad);
 
     // Volume of memory-local portion of sorted array
     double local_vol = sum(sort_quad);
