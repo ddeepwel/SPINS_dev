@@ -132,6 +132,9 @@ class Cheb_2dmg : public GMRES_Interface < fbox * , ubox *> {
       void resid_scale(fbox * & vec, double scale);
       void basis_scale(ubox * & vec, double scale);
 
+      void resid_write(fbox * & vec, int seq);
+      void basis_write(ubox * & vec, int seq);
+
       bool noisy() const;
 
    private:

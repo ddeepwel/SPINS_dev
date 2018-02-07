@@ -128,10 +128,23 @@ void Cheb_2dmg::free_basis(ubox * & f) {
 }
 
 double Cheb_2dmg::resid_dot(fbox * & l, fbox * & r) {
-//   double s = pssum(sum(*l->gridbox * *r->gridbox),my_comm);
+#if 1
+   double s = pssum(sum(*l->gridbox * *r->gridbox),my_comm);
 //   return pssum(sum(*l->gridbox * *r->gridbox),my_comm);
-//   if (indefinite_problem)
-//      s = s + l->mean*r->mean/(szx*szz);
+   if (indefinite_problem)
+      s = s + l->mean*r->mean;
+#else
+   /* The following code attempts to create a dot product for residuals that more-evenly balances
+      RHS error (from nabla^2 u = f), boundary condition error, and error attributable to the
+      mean-pressure condition (<p> = 0), if this is an indeterminate problem.
+
+      It also appears to be wrong.  Actually enabling this code causes GMRES itself to become
+      very confused, where error measures reported by LAPACK within the GMRES inner iteration
+      no longer match a re-calculation from the original RHS and the estimated solution.
+
+      Whether this is due to some simple bug or a more subtle, mathematical error is 
+      currently unknown (Feb 2018).  Further investigation will wait for the simple calculation
+      (above) actually causing problems in use. */
    double s = 0;
    int imin, imax;
    if (type_x == CHEBY) {
@@ -173,6 +186,7 @@ double Cheb_2dmg::resid_dot(fbox * & l, fbox * & r) {
    // indefinite problem
    if (indefinite_problem)
       s = s + l->mean*r->mean;
+#endif
    return pssum(s,my_comm);
 }
 
@@ -999,6 +1013,18 @@ void Cheb_2dmg::matrix_multiply(ubox * & lhs, fbox * & rhs) {
 
 bool Cheb_2dmg::noisy() const {
    return false && master(my_comm);
+   //return indefinite_problem && master(my_comm);
+}
+
+void Cheb_2dmg::resid_write(fbox * & vec,int seq) {
+   write_array(*(vec->gridbox),"resid",seq);
+   write_reader(*(vec->gridbox),"resid",true);
+   fprintf(stderr,"Residual %d mean: %.5e\n",seq,vec->mean);
+}
+void Cheb_2dmg::basis_write(ubox * & vec,int seq) {
+   write_array(*(vec->gridbox),"basis",seq);
+   write_reader(*(vec->gridbox),"basis",true);
+   fprintf(stderr,"Basis %d sigma: %.5e\n",seq,vec->sigma);
 }
    
 

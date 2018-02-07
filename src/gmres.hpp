@@ -74,6 +74,10 @@ template <class resid_type, class basis_type> class GMRES_Interface {
       virtual void resid_scale(resid_type & a, double c) = 0;
       virtual void basis_scale(basis_type & a, double c) = 0;
 
+      /* For debugging purposes, resid and basis outputs */
+      virtual void resid_write(resid_type & a, int seq) {};
+      virtual void basis_write(basis_type & a, int seq) {};
+
       virtual bool noisy() const { return false; };
       
 };
@@ -278,6 +282,8 @@ template <class Controller> class GMRES_Solver {
          /* And scale for assignment to the residual vector */
          ops->resid_copy(resid_vec(0),start_r);
          ops->resid_scale(resid_vec(0),1/starting_norm);
+         
+         //ops->resid_write(resid_vec(0),0);
 
 
          int my_it = 1;
@@ -286,6 +292,7 @@ template <class Controller> class GMRES_Solver {
             /* Find an x vector that approximately solves the prior basis */
             timing_push("gmres_precond");
             ops->precondition(resid_vec(my_it-1), basis_vec(my_it-1));
+            //ops->basis_write(basis_vec(my_it-1),my_it-1);
             timing_pop();
             timing_push("gmres_matmul");
             /* Apply the operator the current basis vector */
@@ -308,6 +315,9 @@ template <class Controller> class GMRES_Solver {
             double norm = sqrt(ops->resid_dot(resid_vec(my_it),resid_vec(my_it)));
 //            fprintf(stderr,"norm %g\n",norm);
             ops->resid_scale(resid_vec(my_it),1/norm);
+
+            //ops->resid_write(resid_vec(my_it),my_it);
+
             //cout << resid_vec[my_it];
             hess(my_it+1,my_it) = norm;
             timing_pop();
@@ -316,10 +326,12 @@ template <class Controller> class GMRES_Solver {
             timing_push("gmres_hess");
             {
                /* LAPACK overwrites the matrix, so copy */
-//               std::cerr.precision(8);
-//               std::cerr.width(8);
-//               std::cerr.setf( std::ios::scientific );
-//               std::cerr << hess;
+#if 0
+               std::cerr.precision(5);
+               std::cerr.width(5);
+               std::cerr.setf( std::ios::scientific );
+               std::cerr << hess;
+#endif
                hess_copy = hess;
                int M = my_it+1, N = my_it;
                rhs_vec = 0; rhs_vec(1) = 1;
