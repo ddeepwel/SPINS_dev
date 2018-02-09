@@ -5,7 +5,7 @@
 void WriteCaseFileSource(void)
 {
     char* filename;
-    if ( strcmp(casefilename, "cases/derivatives/derivatives.cpp") ) {
+    if ( strcmp(casefilename, "cases/derivatives/derivatives.cpp") == 0 ) {
         filename = "derivatives.cpp";
     } else {
         filename = "spinscase.cpp";

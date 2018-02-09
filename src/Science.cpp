@@ -222,6 +222,32 @@ void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTA
     gradient_op->get_dx(&vortz,true);
 }
 
+void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
+        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::Grad * gradient_op, const string * grid_type) {
+    // compute each component
+    compute_vort_x(vortx, v, w, gradient_op, grid_type);
+    compute_vort_y(vorty, u, w, gradient_op, grid_type);
+    compute_vort_z(vortz, u, v, gradient_op, grid_type);
+}
+
+// Enstrophy Density: 1/2*(vort_x^2 + vort_y^2 + vort_z^2)
+void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::DTArray & v,
+        TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
+        const int Nx, const int Ny, const int Nz) {
+    // initalize temporary array
+    static DTArray *temp = alloc_array(Nx,Ny,Nz);
+
+    // square vorticity components
+    compute_vort_x(v, w, *temp, gradient_op, grid_type);
+    enst = pow(*temp,2);
+    compute_vort_y(u, w, *temp, gradient_op, grid_type);
+    enst += pow(*temp,2);
+    compute_vort_z(u, v, *temp, gradient_op, grid_type);
+    enst += pow(*temp,2);
+    enst = 0.5*enst;
+}
+
 // Viscous dissipation: 2*mu*e_ij*e_ij
 void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
@@ -280,21 +306,12 @@ void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray
     diss *= 2.0*visco;
 }
 
-void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
-        TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
-        TArrayn::Grad * gradient_op, const string * grid_type) {
-    // compute each component
-    compute_vort_x(vortx, v, w, gradient_op, grid_type);
-    compute_vort_y(vorty, u, w, gradient_op, grid_type);
-    compute_vort_z(vortz, u, v, gradient_op, grid_type);
-}
-
 bool compare_pairs( pair<double, double> a, pair<double, double> b ) {
 	return a.first < b.first;
 }
 
 // Compute Background Potential Energy (BPE)
-void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, TArrayn::DTArray & quad3,
         int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g,
         double rho_0, int iter, bool dimensional_rho, bool mapped, Array<double,1> hill) {
     // Tensor variables for indexing
@@ -308,7 +325,6 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
 
     // Arrays for sorting
     static Array<double,3> sort_rho, sort_quad;
-    static DTArray *quad3;     // quadrature weights
     static vector<double> sort_hill(Nx), sort_dx(Nx);
     static vector<double> Lx_partsum(Nx), hillvol_partsum(Nx);
     double *local_vols =   new double[numprocs];
@@ -318,15 +334,9 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     static vector < pair<double, double> > height_width(Nx);
 
     // Stuff to do once at the beginning
-    if (iter == 1) {
-        // create array of voxels
-        quad3 = alloc_array(Nx,Ny,Nz);
-        *quad3 = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);
-
+    if (iter == 0) {
         // adjust if mapped
         if ( mapped ) {
-            *quad3 = (*quad3)*(Lz-hill(ii))/Lz;
-
             // information about the hill
             hill_vol = pssum(sum(hill*Ly*(*get_quad_x())));
             hill_max = psmax(max(hill));
@@ -379,7 +389,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
     }
 
     // Compute sorted rho
-    sortarray(rho, *quad3, sort_rho, sort_quad);
+    sortarray(rho, quad3, sort_rho, sort_quad);
 
     // Volume of memory-local portion of sorted array
     double local_vol = sum(sort_quad);
@@ -409,7 +419,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho,
             while ( (base_vol > Lx_partsum[II]*sort_hill[II] - hillvol_partsum[II]) and (II<Nx-1) ) {
                 II++;
             }
-            assert(II>0 && "Something bad happened leading up to the tmpH calculation.\n");
+            assert(II>0 && "Something bad happened leading up to the tmpH calculation.");
             // now subtract off the bit we went over by (draw yourself a picture, it works)
             tmpH = sort_hill[II] - (sort_hill[II]*Lx_partsum[II] - base_vol - hillvol_partsum[II])/Lx_partsum[II-1];
         }
@@ -649,5 +659,151 @@ S_EXP swap_trig( S_EXP the_exp ) {
         return CHEBY; }
     else {
         MPI_Finalize(); exit(1); // stop
+    }
+}
+
+// Bottom slope
+void bottom_slope(TArrayn::DTArray & Hprime, TArrayn::DTArray & zgrid,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nx, const int Ny, const int Nz) {
+    // Set-up
+    DTArray & z_x = *alloc_array(Nx,Ny,Nz);
+    blitz::Range all = blitz::Range::all();
+    blitz::firstIndex ii;
+    blitz::secondIndex jj;
+    blitz::thirdIndex kk;
+    S_EXP expan[3];
+    assert(gradient_op);
+
+    // get bottom topography
+    Array<double,1> xx(split_range(Nx));
+    xx = zgrid(all,0,0);
+    // put into temp array, and take derivative
+    temp = xx(ii) + 0*jj + 0*kk;
+    find_expansion(grid_type, expan, "zgrid");
+    gradient_op->setup_array(&temp,expan[0],expan[1],expan[2]);
+    gradient_op->get_dx(&z_x);
+    // flatten to get 2D array
+    Hprime(all,all,0) = z_x(all,all,0);
+    delete &z_x, xx;
+}
+
+// Top Stress (along channel - x)
+void top_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & u,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nz, const double visco) {
+    // Set-up
+    blitz::Range all = blitz::Range::all();
+    S_EXP expan[3];
+    assert(gradient_op);
+    assert((grid_type[2] == "NO_SLIP") && "Surface stress requires NO_SLIP vertical (z) boundary condition");
+
+    // du/dz
+    find_expansion(grid_type, expan, "u");
+    gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+    gradient_op->get_dz(&temp,false);
+    // top stress
+    stress_x(all,all,0) = -visco*temp(all,all,Nz-1);
+}
+// Top Stress (across channel - y)
+void top_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & v,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nz, const double visco) {
+    // Set-up
+    blitz::Range all = blitz::Range::all();
+    S_EXP expan[3];
+    assert(gradient_op);
+    assert((grid_type[2] == "NO_SLIP") && "Surface stress requires NO_SLIP vertical (z) boundary condition");
+
+    // dv/dz
+    find_expansion(grid_type, expan, "v");
+    gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+    gradient_op->get_dz(&temp,false);
+    // top stress
+    stress_y(all,all,0) = -visco*temp(all,all,Nz-1);
+}
+// Bottom Stress (along channel - x)
+void bottom_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & Hprime,
+        TArrayn::DTArray & u, TArrayn::DTArray & w, TArrayn::DTArray & temp,
+        TArrayn::Grad * gradient_op, const string * grid_type, const bool mapped,
+        const double visco) {
+    // Set-up
+    blitz::Range all = blitz::Range::all();
+    S_EXP expan[3];
+    assert(gradient_op);
+    assert((grid_type[2] == "NO_SLIP") && "Surface stress requires NO_SLIP vertical (z) boundary condition");
+    // Along channel bottom stress can also be slightly inaccurate when x boundary condition is free slip
+    // since u or w do not necessarily satisfy Neumann BCs and the derivative has Gibbs at domain edges
+    // This is only true if there is velocity at left or right (in x) end wall corner, so is likely always small
+
+    if (mapped) {
+        // -du/dx
+        find_expansion(grid_type, expan, "u");
+        gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+        gradient_op->get_dx(&temp,false);
+        temp = (-1)*temp;
+        // dw/dz
+        find_expansion(grid_type, expan, "w");
+        gradient_op->setup_array(&w,expan[0],expan[1],expan[2]);
+        gradient_op->get_dz(&temp,true);
+        // 2H'*(w_z-u_x)
+        stress_x(all,all,0) = 2*Hprime(all,all,0)*temp(all,all,0);
+
+        // dw/dx
+        find_expansion(grid_type, expan, "w");
+        gradient_op->setup_array(&w,expan[0],expan[1],expan[2]);
+        gradient_op->get_dx(&temp,false);
+        // du/dz
+        find_expansion(grid_type, expan, "u");
+        gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+        gradient_op->get_dz(&temp,true);
+        // (1-(H')^2)*(u_z+w_x)
+        stress_x(all,all,0) += (1-pow(Hprime(all,all,0),2))*temp(all,all,0);
+        // multiply by mu/(1+(H')^2)
+        stress_x = visco/(1+pow(Hprime,2))*stress_x;
+    } else {
+        // du/dz
+        find_expansion(grid_type, expan, "u");
+        gradient_op->setup_array(&u,expan[0],expan[1],expan[2]);
+        gradient_op->get_dz(&temp,false);
+        // bottom stress
+        stress_x(all,all,0) = visco*temp(all,all,0);
+    }
+}
+// Bottom Stress (across channel - y)
+void bottom_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & Hprime,
+        TArrayn::DTArray & v, TArrayn::DTArray & temp,
+        TArrayn::Grad * gradient_op, const string * grid_type, const bool mapped,
+        const double visco) {
+    // Set-up
+    blitz::Range all = blitz::Range::all();
+    S_EXP expan[3];
+    assert(gradient_op);
+    assert((grid_type[2] == "NO_SLIP") && "Surface stress requires NO_SLIP vertical (z) boundary condition");
+    // Across channel bottom stress can also be slightly inaccurate when x boundary condition is free slip
+    // since v does not necessarily satisfy Neumann BCs and the derivative has Gibbs at domain edges
+    // This is only true if there is velocity at left or right (in x) end wall corner, so is likely always small
+
+    if (mapped) {
+        // dv/dx
+        find_expansion(grid_type, expan, "v");
+        gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+        gradient_op->get_dx(&temp,false);
+        // -v_x*H'
+        stress_y(all,all,0) = -temp(all,all,0)*Hprime(all,all,0);
+        // dv/dz
+        gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+        gradient_op->get_dz(&temp,false);
+        // add to -v_x*H'
+        stress_y(all,all,0) = temp(all,all,0) + stress_y(all,all,0);
+        // multiply by mu/sqrt(1+(H')^2)
+        stress_y = visco/pow(1+pow(Hprime,2),0.5)*stress_y;
+    } else {
+        // dv/dz
+        find_expansion(grid_type, expan, "v");
+        gradient_op->setup_array(&v,expan[0],expan[1],expan[2]);
+        gradient_op->get_dz(&temp,false);
+        // bottom stress
+        stress_y(all,all,0) = visco*temp(all,all,0);
     }
 }

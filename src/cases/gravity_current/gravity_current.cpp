@@ -1,12 +1,13 @@
-/* Script for the formation of a gravity current with zero initial velocity
- * and no topography */
+/* Script for the formation of a gravity current with:
+ * zero initial velocity
+ * density stratification (not salt/temp)
+ * and with or without topography */
 
 /* ------------------ Top matter --------------------- */
 
 // Required headers
 #include "../../BaseCase.hpp"      // Support file containing default implementations of several functions
 #include "../../Options.hpp"       // config-file parser
-#include "../../Science.hpp"       // Science content
 #include <random/normal.h>         // Blitz random number generator
 
 using namespace ranlib;
@@ -22,6 +23,8 @@ blitz::thirdIndex kk;
 double Lx, Ly, Lz;              // Grid lengths (m)
 int    Nx, Ny, Nz;              // Number of points in x, y, z
 double MinX, MinY, MinZ;        // Minimum x/y/z points (m)
+// Mapped grid?
+bool mapped;
 // Grid types
 DIMTYPE intype_x, intype_y, intype_z;
 string grid_type[3];
@@ -39,6 +42,11 @@ const int RHO = 0;              // index for rho
 double delta_rho;               // density difference between different layers (% of reference density)
 double delta_x;                 // horizontal transition length (m)
 double Lmix;                    // Width of mixed region (m)
+
+// Topography parameters
+double hill_height;             // height of hill (m)
+double hill_centre;             // position of hill peak (m)
+double hill_width;              // width of hill (m)
 
 // Temporal parameters
 double final_time;              // Final time (s)
@@ -63,6 +71,9 @@ bool compute_enstrophy;         // Compute enstrophy?
 bool compute_dissipation;       // Compute dissipation?
 bool compute_BPE;               // Compute background potential energy?
 bool compute_internal_to_BPE;   // Compute BPE gained from internal energy?
+bool compute_stresses_top;      // Compute top surface stresses?
+bool compute_stresses_bottom;   // Compute bottom surface stresses?
+bool write_pressure;            // Write the pressure field?
 int iter = 0;                   // Iteration counter
 
 // Maximum squared buoyancy frequency
@@ -72,12 +83,15 @@ double N2_max;
 
 class userControl : public BaseCase {
     public:
-        // Grid arrays
-        Array<double,1> xx, yy, zz;
+        // Grid and topography arrays
+        DTArray *xgrid, *ygrid, *zgrid; // Full grid fields
+        Array<double,1> xx, yy, zz;     // 1D grid vectors
+        Array<double,1> topo;           // topography vector
+        DTArray *Hprime;                // derivative of topography vector
 
-        // arrays and operators for derivatives
+        // Arrays and operators for derivatives
         Grad * gradient_op;
-        DTArray *temp1;
+        DTArray *temp1, *dxdydz;
 
         // Timing variables (for outputs and measuring time steps)
         int plot_number;        // plot output number
@@ -119,6 +133,39 @@ class userControl : public BaseCase {
         // Number of tracers (the first is density)
         int numtracers() const { return Num_tracers; }
 
+        // Create mapped grid
+        bool is_mapped() const { return mapped; }
+        void do_mapping(DTArray & xg, DTArray & yg, DTArray & zg) {
+            xgrid = alloc_array(Nx,Ny,Nz);
+            ygrid = alloc_array(Nx,Ny,Nz);
+            zgrid = alloc_array(Nx,Ny,Nz);
+
+            // over-write zz to be between -1 and 1
+            // (zz defined in automatic_grid below)
+            zz = -cos(ii*M_PI/(Nz-1));      // Chebyshev in vertical
+
+            // Define topography
+            topo = hill_height*exp(-pow((xx(ii)-hill_centre)/hill_width,2));
+
+            // make full grids
+            xg = xx(ii) + 0*jj + 0*kk;
+            yg = yy(jj) + 0*ii + 0*kk;
+            zg = MinZ + 0.5*Lz*(1+zz(kk)) + 0.5*(1-zz(kk))*topo(ii);
+            *xgrid = xg;
+            *ygrid = yg;
+            *zgrid = zg;
+
+            // Write the arrays and matlab readers
+            write_array(xg,"xgrid");
+            write_reader(xg,"xgrid",false);
+            if (Ny > 1 || rot_f != 0) {
+                write_array(yg,"ygrid");
+                write_reader(yg,"ygrid",false);
+            }
+            write_array(zg,"zgrid");
+            write_reader(zg,"zgrid",false);
+        }
+
         /* Initialize velocities */
         void init_vels(DTArray & u, DTArray & v, DTArray & w) {
             if (master()) fprintf(stdout,"Initializing velocities\n");
@@ -142,7 +189,7 @@ class userControl : public BaseCase {
                         for (int k = u.lbound(thirdDim); k <= u.ubound(thirdDim); k++) {
                             u(i,j,k) += perturb*rnd.random();
                             w(i,j,k) += perturb*rnd.random();
-                            if ( Ny > 1 )
+                            if (Ny > 1 || rot_f != 0)
                                 v(i,j,k) += perturb*rnd.random();
                         }
                     }
@@ -168,6 +215,8 @@ class userControl : public BaseCase {
             } else {
                 // Density configuration
                 rho = delta_rho*0.5*(1.0-tanh((xx(ii)-Lmix)/delta_x)) + 0*jj + 0*kk;
+                // Important! if mapped, and rho depends on z
+                // then (*zgrid)(ii,jj,kk), must be used in stead of zz(kk)
                 // Write the array
                 write_array(rho,"rho",plot_number);
             }
@@ -186,16 +235,31 @@ class userControl : public BaseCase {
         /* Basic analysis: compute secondary variables, and save fields and diagnostics */
         void analysis(double time, DTArray & u, DTArray & v, DTArray & w,
                 vector<DTArray *> & tracers, DTArray & pressure) {
-            // increase counter
-            iter++;
             // Set-up
-            if ( iter == 1 ) {
-                if (compute_enstrophy or compute_dissipation) {
+            if ( iter == 0 ) {
+                if ( compute_enstrophy or compute_dissipation or
+                        compute_stresses_top or compute_stresses_bottom ) {
                     temp1 = alloc_array(Nx,Ny,Nz);
                 }
-                // Determine last plot if restarting from the dump case
+                if ( compute_stresses_top or compute_stresses_bottom ) {
+                    // initialize the vector of the bottom slope (Hprime)
+                    Hprime = alloc_array(Nx,Ny,1);
+                    if (is_mapped()) {
+                        bottom_slope(*Hprime, *zgrid, *temp1, gradient_op, grid_type, Nx, Ny, Nz);
+                    } else {
+                        topo = 0*ii;
+                        *Hprime = 0*ii + 0*jj;
+                    }
+                }
+                // Determine last plot if restarting from the dump file
                 if (restart_from_dump) {
-                    next_plot = (restart_sequence+1)*plot_interval;    
+                    next_plot = (restart_sequence+1)*plot_interval;
+                }
+                // initialize the size of each voxel
+                dxdydz = alloc_array(Nx,Ny,Nz);
+                *dxdydz = (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk);
+                if (is_mapped()) {
+                    *dxdydz = (*dxdydz)*(Lz-topo(ii))/Lz;
                 }
             }
             // update clocks
@@ -209,27 +273,34 @@ class userControl : public BaseCase {
             // Energy (PE assumes density is density anomaly)
             double ke_x = 0, ke_y = 0, ke_z = 0;
             if ( Nx > 1 ) {
-                ke_x = pssum(sum(0.5*rho_0*(u*u)*
-                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                ke_x = pssum(sum(0.5*rho_0*(u*u)*(*dxdydz)));
             }
-            if ( Ny > 1 || rot_f != 0) {
-                ke_y = pssum(sum(0.5*rho_0*(v*v)*
-                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            if (Ny > 1 || rot_f != 0) {
+                ke_y = pssum(sum(0.5*rho_0*(v*v)*(*dxdydz)));
             }
             if ( Nz > 1 ) {
-                ke_z = pssum(sum(0.5*rho_0*(w*w)*
-                       (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                ke_z = pssum(sum(0.5*rho_0*(w*w)*(*dxdydz)));
             }
-            double pe_tot = pssum(sum(rho_0*(1+*tracers[RHO])*g*(zz(kk) - MinZ)*
-                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            double pe_tot;
+            if (is_mapped()) {
+                pe_tot = pssum(sum(rho_0*(1+(*tracers[RHO]))*g*((*zgrid)(ii,jj,kk) - MinZ)*(*dxdydz)));
+            } else {
+                pe_tot = pssum(sum(rho_0*(1+(*tracers[RHO]))*g*(zz(kk) - MinZ)*(*dxdydz)));
+            }
             double BPE_tot = 0;
             if (compute_BPE) {
-                compute_Background_PE(BPE_tot, *tracers[RHO], Nx, Ny, Nz, Lx, Ly, Lz, g, rho_0, iter);
+                compute_Background_PE(BPE_tot, *tracers[RHO], *dxdydz, Nx, Ny, Nz, Lx, Ly, Lz,
+                        g, rho_0, iter, false, is_mapped(), topo);
             }
             // Conversion from internal energy to background potential energy
             double phi_i = 0;
             if (compute_internal_to_BPE) {
-                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
+                if (!is_mapped()) {
+                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz,
+                        false, is_mapped(), Hprime);
+                } else {
+                // this is not finished yet for the mapped case
+                }
             }
             // viscous dissipation
             double diss_tot = 0;
@@ -237,8 +308,7 @@ class userControl : public BaseCase {
             if (compute_dissipation) {
                 dissipation(*temp1, u, v, w, gradient_op, grid_type, Nx, Ny, Nz, mu);
                 max_diss = psmax(max(*temp1));
-                diss_tot = pssum(sum((*temp1)*
-                            (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                diss_tot = pssum(sum((*temp1)*(*dxdydz)));
             }
             // Vorticity / Enstrophy
             double max_vort_x = 0, enst_x_tot = 0;
@@ -249,22 +319,19 @@ class userControl : public BaseCase {
                 if (Ny > 1 and Nz > 1) {
                     compute_vort_x(*temp1, v, w, gradient_op, grid_type);
                     max_vort_x = psmax(max(abs(*temp1)));
-                    enst_x_tot = pssum(sum(0.5*pow(*temp1,2)*
-                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                    enst_x_tot = pssum(sum(0.5*pow(*temp1,2)*(*dxdydz)));
                 }
                 // y-vorticity
                 if (Nx > 1 and Nz > 1) {
                     compute_vort_y(*temp1, u, w, gradient_op, grid_type);
                     max_vort_y = psmax(max(abs(*temp1)));
-                    enst_y_tot = pssum(sum(0.5*pow(*temp1,2)*
-                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                    enst_y_tot = pssum(sum(0.5*pow(*temp1,2)*(*dxdydz)));
                 }
                 // z-vorticity
                 if (Nx > 1 and Ny > 1) {
                     compute_vort_z(*temp1, u, v, gradient_op, grid_type);
                     max_vort_z = psmax(max(abs(*temp1)));
-                    enst_z_tot = pssum(sum(0.5*pow(*temp1,2)*
-                                (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+                    enst_z_tot = pssum(sum(0.5*pow(*temp1,2)*(*dxdydz)));
                 }
             }
             // max of fields
@@ -274,8 +341,7 @@ class userControl : public BaseCase {
             double max_vel = psmax(max(sqrt(u*u + v*v + w*w)));
             double max_rho = psmax(max(abs(*tracers[RHO])));
             // total mass (tracers[RHO] is non-dimensional density)
-            double mass = pssum(sum(rho_0*(1+(*tracers[RHO]))*
-                        (*get_quad_x())(ii)*(*get_quad_y())(jj)*(*get_quad_z())(kk)));
+            double mass = pssum(sum(rho_0*(1+(*tracers[RHO]))*(*dxdydz)));
 
             if (master()) {
                 // add diagnostics to buffers
@@ -331,16 +397,27 @@ class userControl : public BaseCase {
                         max_u,max_v,max_w,max_rho);
             }
 
+            // Top Surface Stresses
+            if ( compute_stresses_top ) {
+                stresses_top(u, v, w, *Hprime, *temp1, gradient_op, grid_type, mu, time, iter, restarting);
+            }
+            // Bottom Surface Stresses
+            if ( compute_stresses_bottom ) {
+                stresses_bottom(u, v, w, *Hprime, *temp1, gradient_op, grid_type, mu, time, iter, restarting);
+            }
+
             /* Write to disk if at correct time */
             if ((time - next_plot) > -1e-6) {
                 plot_number++;
                 comp_duration = MPI_Wtime(); // time just before write (for dump)
-                //Write the arrays
+                // Write the arrays
                 write_array(u,"u",plot_number);
                 write_array(w,"w",plot_number);
                 if (Ny > 1 || rot_f != 0)
                     write_array(v,"v",plot_number);
                 write_array(*tracers[RHO],"rho",plot_number);
+                if (write_pressure)
+                    write_array(pressure,"p",plot_number);
                 // update next plot time
                 next_plot = next_plot + plot_interval;
 
@@ -349,20 +426,7 @@ class userControl : public BaseCase {
                 avg_write_time = (avg_write_time*(plot_number-restart_sequence-1) 
                         + (clock_time - comp_duration))/(plot_number-restart_sequence);
                 // Print information about plot outputs
-                if (master()) {
-                    // in log file
-                    fprintf(stdout,"*Write time: %.6g. Average write time: %.6g.\n",
-                            clock_time - comp_duration, avg_write_time);
-                    // track in a file
-                    FILE * plottimes_file = fopen("plot_times.txt","a");
-                    assert(plottimes_file);
-                    if ( plot_number==restart_sequence+1 and !restarting )
-                        fprintf(plottimes_file,"Output number, Simulation time (s), "
-                                "Write time (s), Average write time (s)\n");
-                    fprintf(plottimes_file,"%d, %.12f, %.12g, %.12g\n",
-                                plot_number, time, clock_time - comp_duration, avg_write_time);
-                    fclose(plottimes_file);
-                }
+                write_plot_times(time, clock_time, comp_duration, avg_write_time, plot_number, restarting);
             }
 
             // see if close to end of compute time and dump
@@ -370,6 +434,8 @@ class userControl : public BaseCase {
                     plot_number, u, v, w, tracers);
             // Change dump log file if successfully reached final time
             successful_dump(plot_number, final_time, plot_interval);
+            // increase counter
+            iter++;
         }
 
         // User specified variables to dump
@@ -384,7 +450,7 @@ class userControl : public BaseCase {
         // Constructor: Initialize local variables
         userControl():
             xx(split_range(Nx)), yy(Ny), zz(Nz),
-            gradient_op(0),
+            topo(split_range(Nx)), gradient_op(0),
             plot_number(restart_sequence),
             next_plot(initial_time + plot_interval)
     {   compute_quadweights(
@@ -427,6 +493,12 @@ int main(int argc, char ** argv) {
             "   NO_SLIP: Chebyhsev expansion");
     add_option("type_y",&ygrid_type,"FOURIER","Grid type in Y");
     add_option("type_z",&zgrid_type,"Grid type in Z");
+    add_option("mapped_grid",&mapped,true,"Is the grid mapped?");
+
+    option_category("Topography parameters");
+    add_option("hill_height",&hill_height,"Height of hill");
+    add_option("hill_centre",&hill_centre,"location of hill peak");
+    add_option("hill_width",&hill_width,"Width of hill");
 
     option_category("Physical parameters");
     add_option("g",&g,9.81,"Gravitational acceleration");
@@ -443,7 +515,7 @@ int main(int argc, char ** argv) {
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
     add_option("plot_interval",&plot_interval,"Time between writes");
-    add_option("dt_max",&dt_max,"Maximum time step");
+    add_option("dt_max",&dt_max,0.0,"Maximum time step. Zero value results in the default");
 
     option_category("Restart options");
     add_option("restart",&restarting,false,"Restart from prior output time.");
@@ -461,6 +533,9 @@ int main(int argc, char ** argv) {
     add_option("compute_BPE",&compute_BPE,true,"Calculate BPE?");
     add_option("compute_internal_to_BPE",&compute_internal_to_BPE,true,
             "Calculate BPE gained from internal energy?");
+    add_option("compute_stresses_top",&compute_stresses_top,false,"Calculate top surfaces stresses?");
+    add_option("compute_stresses_bottom",&compute_stresses_bottom,false,"Calculate bottom surfaces stresses?");
+    add_option("write_pressure",&write_pressure,false,"Write the pressure field?");
 
     option_category("Filter options");
     add_option("f_cutoff",&f_cutoff,0.6,"Filter cut-off frequency");
@@ -505,7 +580,7 @@ int main(int argc, char ** argv) {
     // Maximum buoyancy frequency (squared) if the initial stratification was stable
     N2_max = g*delta_rho/(2*delta_x);
     // Maximum time step
-    if (dt_max <= 0) {
+    if (dt_max == 0.0) {
         // if dt_max not given in spins.conf, use the buoyancy frequency
         dt_max = 0.5/sqrt(N2_max);
     }
@@ -519,7 +594,8 @@ int main(int argc, char ** argv) {
         fprintf(stdout,"Time between plots: %g s\n",plot_interval);
         fprintf(stdout,"Initial velocity perturbation: %g\n",perturb);
         fprintf(stdout,"Filter cutoff = %f, order = %f, strength = %f\n",f_cutoff,f_order,f_strength);
-        fprintf(stdout,"Buoyancy frequency squared %g\n",N2_max);
+        fprintf(stdout,"Approx. max buoyancy frequency squared: %g\n",N2_max);
+        fprintf(stdout,"Max time step: %g\n",dt_max);
     }
 
     /* ------------------ Do stuff --------------------- */

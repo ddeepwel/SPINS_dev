@@ -13,7 +13,7 @@ SYSTEM_LDFLAGS=
 
 # Compiler flags for debugging
 DEBUG_CFLAGS="-g -DBZ_DEBUG"
-DEBUG_LDFLAGS=
+DEBUG_LDFLAGS="-g -DBZ_DEBUG"
 
 # Compiler flags for optimization
 OPTIM_CFLAGS="-O3 -fp-model fast=2"

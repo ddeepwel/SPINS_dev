@@ -34,14 +34,18 @@ void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTA
 void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
         TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
         TArrayn::Grad * gradient_op, const string * grid_type);
+// Enstrophy density
+void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::DTArray & v,
+        TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
+        const int Nx, const int Ny, const int Nz);
 // Viscous dissipation
 void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
         const int Nx, const int Ny, const int Nz, const double visco);
 
 // Background Potential Energy (BPE)
-void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, int Nx, int Ny, int Nz,
-        double Lx, double Ly, double Lz, double g, double rho_0, int iter,
+void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, TArrayn::DTArray & quad3,
+        int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g, double rho_0, int iter,
         bool dimensional_rho = false, bool mapped = false, Array<double,1> hill = Array<double,1>());
 // Internal energy converted to BPE
 void compute_BPE_from_internal(double & phi_i, TArrayn::DTArray & rho,
@@ -61,6 +65,27 @@ const blitz::Array<double,1> * get_quad_z();
 void find_expansion(const string * grid_type, Transformer::S_EXP * expan, string deriv_filename);
 // switch trig function
 Transformer::S_EXP swap_trig( Transformer::S_EXP the_exp );
+
+// Bottom slope
+void bottom_slope(TArrayn::DTArray & Hprime, TArrayn::DTArray & zgrid,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nx, const int Ny, const int Nz);
+// Top stresses
+void top_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & u,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nz, const double visco);
+void top_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & v,
+        TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const int Nz, const double visco);
+// Bottom stresses
+void bottom_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & Hprime,
+        TArrayn::DTArray & u, TArrayn::DTArray & w, TArrayn::DTArray & temp,
+        TArrayn::Grad * gradient_op, const string * grid_type, const bool mapped,
+        const double visco);
+void bottom_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & Hprime,
+        TArrayn::DTArray & v, TArrayn::DTArray & temp,
+        TArrayn::Grad * gradient_op, const string * grid_type, const bool mapped,
+        const double visco);
 
 // Equation of state for seawater, polynomial fit from
 // Brydon, Sun, Bleck (1999) (JGR)

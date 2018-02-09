@@ -1,4 +1,5 @@
 #include "BaseCase.hpp"
+#include "Science.hpp"
 #include "NSIntegrator.hpp"
 #include "TArray.hpp"
 #include <blitz/array.h>
@@ -412,13 +413,32 @@ void BaseCase::write_diagnostics(string header, string line,
     FILE * diagnos_file = fopen("diagnostics.txt","a");
     assert(diagnos_file);
     // print header
-    if (iter == 1 and !restarting) {
+    if (iter == 0 and !restarting) {
         fprintf(diagnos_file,"%s\n",clean_header.c_str());
     }
     // print the line of values
     fprintf(diagnos_file, "%s\n", clean_line.c_str());
     // Close file
     fclose(diagnos_file);
+}
+
+// Write plot time information
+void BaseCase::write_plot_times(double time, double clock_time, double comp_duration,
+        double avg_write_time, int plot_number, bool restarting) {
+    if (master()) {
+        // in log file
+        fprintf(stdout,"*Write time: %.6g. Average write time: %.6g.\n",
+                clock_time - comp_duration, avg_write_time);
+        // track in a file
+        FILE * plottimes_file = fopen("plot_times.txt","a");
+        assert(plottimes_file);
+        if ( plot_number==get_restart_sequence()+1 and !restarting )
+            fprintf(plottimes_file,"Output number, Simulation time (s), "
+                    "Write time (s), Average write time (s)\n");
+        fprintf(plottimes_file,"%d, %.17f, %.12g, %.12g\n",
+                plot_number, time, clock_time - comp_duration, avg_write_time);
+        fclose(plottimes_file);
+    }
 }
 
 // parse expansion types 
@@ -452,3 +472,93 @@ void parse_boundary_conditions(const string xgrid_type, const string ygrid_type,
     }
 }
 
+// Top stresses
+void BaseCase::stresses_top(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::DTArray & Hprime, TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const double mu, double time, int itercount, bool restarting) {
+    // set-up
+    static DTArray *tx = alloc_array(size_x(),size_y(),1);
+    static DTArray *ty = alloc_array(size_x(),size_y(),1);
+    blitz::firstIndex ii;
+    blitz::secondIndex jj;
+
+    // top stress ( along channel - x )
+    top_stress_x(*tx, u, temp, gradient_op, grid_type, size_z(), mu);
+    double top_tx_tot = pssum(sum(
+                (*get_quad_x())(ii)*
+                (*get_quad_y())(jj)*(*tx)));
+    double top_tx_abs = pssum(sum(
+                (*get_quad_x())(ii)*
+                (*get_quad_y())(jj)*abs(*tx)));
+    // top stress ( across channel - y )
+    top_stress_y(*ty, v, temp, gradient_op, grid_type, size_z(), mu);
+    double top_ty_tot = pssum(sum(
+                (*get_quad_x())(ii)*
+                (*get_quad_y())(jj)*(*ty)));
+    double top_ty_abs = pssum(sum(
+                (*get_quad_x())(ii)*
+                (*get_quad_y())(jj)*abs(*ty)));
+    // total top stress
+    double top_ts = pssum(sum(
+                (*get_quad_x())(ii)*
+                (*get_quad_y())(jj)*pow(pow(*tx,2)+pow(*ty,2),0.5)));
+    // write to a stress diagnostic file
+    if (master()) {
+        FILE * stresses_file = fopen("stresses_top.txt","a");
+        assert(stresses_file);
+        if ( itercount==0 and !restarting )
+            fprintf(stresses_file,"Time, "
+                    "Top_tx_tot, Top_tx_abs, Top_ty_tot, Top_ty_abs, Top_ts\n");
+        fprintf(stresses_file,"%.17f, "
+                "%.17g, %.17g, %.17g, %.17g, %.17g\n",
+                time,
+                top_tx_tot, top_tx_abs, top_ty_tot, top_ty_abs, top_ts);
+        fclose(stresses_file);
+    }
+}
+
+// Bottom stresses
+void BaseCase::stresses_bottom(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
+        TArrayn::DTArray & Hprime, TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
+        const string * grid_type, const double mu, double time, int itercount, bool restarting) {
+    // set-up
+    static DTArray *tx = alloc_array(size_x(),size_y(),1);
+    static DTArray *ty = alloc_array(size_x(),size_y(),1);
+    blitz::firstIndex ii;
+    blitz::secondIndex jj;
+
+    // bottom stress ( along channel - x )
+    bottom_stress_x(*tx, Hprime, u, w, temp, gradient_op, grid_type, is_mapped(), mu);
+    double bot_tx_tot = pssum(sum(
+                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
+                (*get_quad_y())(jj)*(*tx)));
+    double bot_tx_abs = pssum(sum(
+                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
+                (*get_quad_y())(jj)*abs(*tx)));
+    // bottom stress ( across channel - y )
+    bottom_stress_y(*ty, Hprime, v, temp, gradient_op, grid_type, is_mapped(), mu);
+    double bot_ty_tot = pssum(sum(
+                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
+                (*get_quad_y())(jj)*(*ty)));
+    double bot_ty_abs = pssum(sum(
+                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
+                (*get_quad_y())(jj)*abs(*ty)));
+    // total bottom stress
+    double bot_ts = pssum(sum(
+                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
+                (*get_quad_y())(jj)*pow(pow(*tx,2)+pow(*ty,2),0.5)));
+
+    // write to a stress diagnostic file
+    if (master()) {
+        FILE * stresses_file = fopen("stresses_bottom.txt","a");
+        assert(stresses_file);
+        if ( itercount==0 and !restarting )
+            fprintf(stresses_file,"Time, "
+                    "Bottom_tx_tot, Bottom_tx_abs, Bottom_ty_tot, Bottom_ty_abs, Bottom_ts\n");
+        fprintf(stresses_file,"%.17f, "
+                "%.17g, %.17g, %.17g, %.17g, %.17g\n",
+                time,
+                bot_tx_tot, bot_tx_abs, bot_ty_tot, bot_ty_abs, bot_ts);
+        fclose(stresses_file);
+    }
+}
