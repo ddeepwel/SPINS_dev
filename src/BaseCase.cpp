@@ -319,6 +319,27 @@ void BaseCase::init_tracer_dump(const std::string & field, DTArray & the_tracer)
     return;
 }
 
+/* Read field from input data type */
+void BaseCase::init_field(const std::string & field,
+        const std::string & filename, DTArray & the_field, input_types input_data_type) {
+    if (input_data_type == MATLAB) {
+        // from matlab
+        if (master()) fprintf(stdout,"Reading MATLAB-format %s (%d x %d) from %s\n",
+                field.c_str(),size_x(),size_z(),filename.c_str());
+        read_2d_slice(the_field,filename.c_str(),size_x(),size_z());
+    } else if (input_data_type == CTYPE) {
+        // from 2D spins output (generally, to go to 3D)
+        if (master()) fprintf(stdout,"Reading CTYPE-format %s (%d x %d) from %s\n",
+                field.c_str(),size_x(),size_z(),filename.c_str());
+        read_2d_restart(the_field,filename.c_str(),size_x(),size_z());
+    } else {
+        // from full (2D or 3D) spins output
+        // only suitable for initializing the grid
+        if (master()) fprintf(stdout,"Reading %s from %s\n",field.c_str(),filename.c_str());
+        read_array(the_field,filename.c_str(),size_x(),size_y(),size_z());
+    }
+}
+
 /* write out vertical chain of data */
 void BaseCase::write_chain(const char *filename, DTArray & val, int Iout, int Jout, double time) {
     FILE *fid=fopen(filename,"a");
@@ -438,6 +459,18 @@ void BaseCase::write_plot_times(double time, double clock_time, double comp_dura
         fprintf(plottimes_file,"%d, %.17f, %.12g, %.12g\n",
                 plot_number, time, clock_time - comp_duration, avg_write_time);
         fclose(plottimes_file);
+    }
+}
+
+// parse file types
+void parse_datatype(const string datatype, input_types & input_data_type) {
+    if (datatype=="MATLAB") { input_data_type = MATLAB; }
+    else if (datatype == "CTYPE") { input_data_type = CTYPE; }
+    else if (datatype == "FULL") { input_data_type = FULL; }
+    else {
+        if (master())
+            fprintf(stderr,"Invalid option %s received for file_type\n",datatype.c_str());
+        MPI_Finalize(); exit(1);
     }
 }
 

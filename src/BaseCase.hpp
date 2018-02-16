@@ -13,6 +13,13 @@ using namespace NSIntegrator;
 using blitz::Array;
 using std::vector;
 
+// Possible input data types
+static enum input_types {
+    MATLAB,
+    CTYPE,
+    FULL
+} input_data_types;
+
 class BaseCase {
    /* To reduce boilerplate, wrap some of the long functions, only calling
       them if actually used by usercode.  For example, a tracer-free code
@@ -98,6 +105,8 @@ class BaseCase {
       virtual void init_vels_dump(DTArray & u, DTArray & v, DTArray & w); 
       virtual void init_tracer_restart(const std::string & field, DTArray & the_tracer); 
       virtual void init_tracer_dump(const std::string & field,  DTArray & the_tracer); 
+      virtual void init_field(const std::string & field, const std::string & filename,
+              DTArray & the_field, input_types input_data_type);
       virtual void init_grid_restart(const std::string & component,
                       const std::string & filename, DTArray & grid);
 
@@ -191,6 +200,8 @@ extern template void BaseCase::add_diagnostic<int>(const string str, const int v
 extern template void BaseCase::add_diagnostic<double>(const string str, const double val,
         string & header, string & line);
 
+// parse for data type
+void parse_datatype(const string datatype, input_types & input_data_type);
 // parse expansion types
 void parse_boundary_conditions(const string xgrid_type, const string ygrid_type,
         const string zgrid_type, DIMTYPE & intype_x, DIMTYPE & intype_y, DIMTYPE & intype_z);
