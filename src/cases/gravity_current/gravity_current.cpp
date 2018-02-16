@@ -84,7 +84,7 @@ double N2_max;
 class userControl : public BaseCase {
     public:
         // Grid and topography arrays
-        DTArray *xgrid, *ygrid, *zgrid; // Full grid fields
+        DTArray *zgrid;                 // Full grid fields
         Array<double,1> xx, yy, zz;     // 1D grid vectors
         Array<double,1> topo;           // topography vector
         DTArray *Hprime;                // derivative of topography vector
@@ -136,8 +136,6 @@ class userControl : public BaseCase {
         // Create mapped grid
         bool is_mapped() const { return mapped; }
         void do_mapping(DTArray & xg, DTArray & yg, DTArray & zg) {
-            xgrid = alloc_array(Nx,Ny,Nz);
-            ygrid = alloc_array(Nx,Ny,Nz);
             zgrid = alloc_array(Nx,Ny,Nz);
 
             // over-write zz to be between -1 and 1
@@ -151,8 +149,6 @@ class userControl : public BaseCase {
             xg = xx(ii) + 0*jj + 0*kk;
             yg = yy(jj) + 0*ii + 0*kk;
             zg = MinZ + 0.5*Lz*(1+zz(kk)) + 0.5*(1-zz(kk))*topo(ii);
-            *xgrid = xg;
-            *ygrid = yg;
             *zgrid = zg;
 
             // Write the arrays and matlab readers
