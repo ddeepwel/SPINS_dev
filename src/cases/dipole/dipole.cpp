@@ -1,5 +1,4 @@
-/* Script for the formation of a Kelvin-Helmholtz billow
- * without topography */
+/* Script for the interaction of a vortex dipole with a wall */
 
 /* ------------------ Top matter --------------------- */
 
@@ -26,23 +25,19 @@ DIMTYPE intype_x, intype_y, intype_z;
 string grid_type[3];
 
 // Physical parameters
-double g, rho_0;                // gravity accel (m/s^2), reference density (kg/m^3)
+double rho_0;                   // reference density (kg/m^3)
 double visco;                   // viscosity (m^2/s)
 double mu;                      // dynamic viscosity (kg/(m·s))
-double kappa_rho;               // diffusivity of density (m^2/s)
 // helpful constants
-const int Num_tracers = 1;      // number of tracers (density and dyes)
-const int RHO = 0;              // index for rho
+const int Num_tracers = 0;      // number of tracers (density and dyes)
 
 // Problem parameters
-double delta_u;                 // horizontal velocity difference (m/s)
-double dz_u;                    // Width of mixed region (m)
-double u_loc;                   // location of the center of shear (m)
-double dz_rho;                  // location of the center of the pycnocline (m)
-double rho_loc;                 // density pycnocline width (m)
-double delta_rho;               // density difference between different layers (% of reference density)
-double rho_perturb;             // magnitude of the density perurbation
-double perturb_k;               // wavenumber of most unstable mode (1/m)
+double U0;                      // initial velocity maximum
+double X1;                      // initial x-position of dipole 1
+double Z1;                      // initial z-position of dipole 1
+double X2;                      // initial x-position of dipole 2
+double Z2;                      // initial z-position of dipole 2
+double r0;                      // radius of dipole
 
 // Temporal parameters
 double final_time;              // Final time (s)
@@ -71,9 +66,6 @@ bool compute_stresses_top;      // Compute top surface stresses?
 bool compute_stresses_bottom;   // Compute bottom surface stresses?
 bool write_pressure;            // Write the pressure field?
 int iter = 0;                   // Iteration counter
-
-// Maximum squared buoyancy frequency
-double N2_max;
 
 /* ------------------ Adjust the class --------------------- */
 
@@ -113,9 +105,6 @@ class userControl : public BaseCase {
 
         // Coriolis parameter, viscosity, and diffusivities
         double get_visco() const { return visco; }
-        double get_diffusivity(int t_num) const {
-            return kappa_rho;
-        }
 
         // Temporal parameters
         double init_time() const { return initial_time; }
@@ -135,10 +124,16 @@ class userControl : public BaseCase {
             } else if (restarting and restart_from_dump) {
                 init_vels_dump(u, v, w);
             } else{
-                // else have a near motionless field
-                u = 0.5*delta_u*tanh((zz(kk)-u_loc)/dz_u);
+                // initial dipole (use v as the vector r^2)
+                u = 0.5*U0 * 
+                    ( (zz(kk)-Z1) * exp(-(pow(xx(ii)-X1,2) + pow(zz(kk)-Z1,2))/(r0*r0))
+                     -(zz(kk)-Z2) * exp(-(pow(xx(ii)-X2,2) + pow(zz(kk)-Z2,2))/(r0*r0))
+                    );
                 v = 0;
-                w = 0;
+                w = 0.5*U0 *
+                    (-(xx(ii)-X1) * exp(-(pow(xx(ii)-X1,2) + pow(zz(kk)-Z1,2))/(r0*r0))
+                     +(xx(ii)-X2) * exp(-(pow(xx(ii)-X2,2) + pow(zz(kk)-Z2,2))/(r0*r0))
+                    );
                 // Add a random perturbation to trigger any 3D instabilities
                 int myrank;
                 MPI_Comm_rank(MPI_COMM_WORLD,&myrank);
@@ -163,37 +158,13 @@ class userControl : public BaseCase {
             }
         }
 
-        /* Initialize the tracers (density and dyes) */
-        void init_tracers(vector<DTArray *> & tracers) {
-            if (master()) fprintf(stdout,"Initializing tracers\n");
-            DTArray & rho = *tracers[RHO];
-            
-            if (restarting and !restart_from_dump) {
-                init_tracer_restart("rho",rho);
-                rho += -0.5*delta_rho * tanh((zz(kk)-rho_loc)/dz_rho);
-            } else if (restarting and restart_from_dump) {
-                init_tracer_dump("rho",rho);
-                rho += -0.5*delta_rho * tanh((zz(kk)-rho_loc)/dz_rho);
-            } else {
-                // Density configuration
-                rho = rho_perturb * delta_rho *
-                    cos(perturb_k*xx(ii)) * pow(cosh((zz(kk)-rho_loc)/dz_rho),-2);
-                // Write the array
-                write_array(rho,"rho",plot_number);
-
-                // add the background stratification
-                rho += -0.5*delta_rho * tanh((zz(kk)-rho_loc)/dz_rho);
-            }
-        }
-
         /* Forcing in the momentum equations */
         void forcing(double t, const DTArray & u, DTArray & u_f,
                 const DTArray & v, DTArray & v_f, const DTArray & w, DTArray & w_f,
                 vector<DTArray *> & tracers, vector<DTArray *> & tracers_f) {
             u_f = 0;
             v_f = 0;
-            w_f = -g*(*tracers[RHO]);   // tracers[RHO] is defined as rho/rho_0
-            *tracers_f[RHO] = 0;
+            w_f = 0;
         }
 
         /* Basic analysis: compute secondary variables, and save fields and diagnostics */
@@ -238,17 +209,10 @@ class userControl : public BaseCase {
                 ke_z = pssum(sum(0.5*rho_0*(w*w)*(*dxdydz)));
             }
             double pe_tot;
-            pe_tot = pssum(sum(rho_0*(1+(*tracers[RHO]))*g*(zz(kk) - MinZ)*(*dxdydz)));
+            pe_tot = 0;
             double BPE_tot = 0;
-            if (compute_BPE) {
-                compute_Background_PE(BPE_tot, *tracers[RHO], *dxdydz, Nx, Ny, Nz, Lx, Ly, Lz,
-                        g, rho_0, iter);
-            }
             // Conversion from internal energy to background potential energy
             double phi_i = 0;
-            if (compute_internal_to_BPE) {
-                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
-            }
             // viscous dissipation
             double diss_tot = 0;
             double max_diss = 0;
@@ -286,9 +250,6 @@ class userControl : public BaseCase {
             double max_v = psmax(max(abs(v)));
             double max_w = psmax(max(abs(w)));
             double max_vel = psmax(max(sqrt(u*u + v*v + w*w)));
-            // total mass (tracers[RHO] is non-dimensional density)
-            double max_rho = psmax(max(abs(*tracers[RHO])));
-            double mass = pssum(sum(rho_0*(1+(*tracers[RHO]))*(*dxdydz)));
 
             if (master()) {
                 // add diagnostics to buffers
@@ -297,8 +258,6 @@ class userControl : public BaseCase {
                 add_diagnostic("Clock_time", comp_duration, header, line);
                 add_diagnostic("Time", time,            header, line);
                 add_diagnostic("Max_vel", max_vel,      header, line);
-                add_diagnostic("Max_density", max_rho,  header, line);
-                add_diagnostic("Mass", mass,            header, line);
                 add_diagnostic("PE_tot", pe_tot,        header, line);
                 if (compute_BPE) {
                     add_diagnostic("BPE_tot", BPE_tot,  header, line);
@@ -340,9 +299,9 @@ class userControl : public BaseCase {
                     write_diagnostics(header, line, iter, restarting);
                 // and to the log file
                 fprintf(stdout,"[%d] (%.4g) %.4f: "
-                        "%.4g %.4g %.4g %.4g\n",
+                        "%.4g %.4g %.4g\n",
                         iter,comp_duration,time,
-                        max_u,max_v,max_w,max_rho);
+                        max_u,max_v,max_w);
             }
 
             // Top Surface Stresses
@@ -363,9 +322,6 @@ class userControl : public BaseCase {
                 write_array(w,"w",plot_number);
                 if (Ny > 1)
                     write_array(v,"v",plot_number);
-                // write the perturbation density
-                *temp1 = +0.5*delta_rho*tanh((zz(kk)-rho_loc)/dz_rho) + (*tracers[RHO]);
-                write_array(*temp1,"rho",plot_number);
                 if (write_pressure)
                     write_array(pressure,"p",plot_number);
                 // update next plot time
@@ -394,8 +350,6 @@ class userControl : public BaseCase {
             write_array(u,"u.dump");
             write_array(v,"v.dump");
             write_array(w,"w.dump");
-            *temp1 = +0.5*delta_rho*tanh((zz(kk)-rho_loc)/dz_rho) + (*tracers[RHO]);
-            write_array(*temp1,"rho.dump");
         }
 
         // Constructor: Initialize local variables
@@ -446,20 +400,16 @@ int main(int argc, char ** argv) {
     add_option("type_z",&zgrid_type,"Grid type in Z");
 
     option_category("Physical parameters");
-    add_option("g",&g,9.81,"Gravitational acceleration");
     add_option("rho_0",&rho_0,1000.0,"Reference density");
     add_option("visco",&visco,"Viscosity");
-    add_option("kappa_rho",&kappa_rho,"Diffusivity of density");
 
     option_category("Problem parameters");
-    add_option("delta_u",&delta_u,"horizontal velocity difference");
-    add_option("dz_u",&dz_u,"velocity shear width");
-    add_option("u_loc",&u_loc,"location of the center of shear");
-    add_option("dz_rho",&dz_rho,"density pycnocline width");
-    add_option("rho_loc",&rho_loc,"location of the center of the pycnocline");
-    add_option("delta_rho",&delta_rho,"Density difference");
-    add_option("rho_perturb",&rho_perturb,"magnitude of density perturbation");
-    add_option("perturb_k",&perturb_k,"wavenumber of most unstable mode");
+    add_option("U0",&U0,"Magnitude of vortex");
+    add_option("X1",&X1,"X-position of dipole 1");
+    add_option("Z1",&Z1,"Z-position of dipole 1");
+    add_option("X2",&X2,"X-position of dipole 2");
+    add_option("Z2",&Z2,"Z-position of dipole 2");
+    add_option("r0",&r0,"Radius of each vortex");
 
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
@@ -526,24 +476,21 @@ int main(int argc, char ** argv) {
 
     // Dynamic viscosity
     mu = visco*rho_0;
-    // Maximum buoyancy frequency (squared) if the initial stratification was stable
-    N2_max = g*delta_rho/(2*dz_rho);
     // Maximum time step
     if (dt_max == 0.0) {
         // if dt_max not given in spins.conf, use the buoyancy frequency
-        dt_max = 0.5/sqrt(N2_max);
+        dt_max = 0.01;
     }
 
     /* ------------------ Print some parameters --------------------- */
 
     if (master()) {
-        fprintf(stdout,"Kelvin-Helmholtz billow problem\n");
+        fprintf(stdout,"Vortex dipole problem\n");
         fprintf(stdout,"Using a %f x %f x %f grid of %d x %d x %d points\n",Lx,Ly,Lz,Nx,Ny,Nz);
-        fprintf(stdout,"g = %f, rho_0 = %f\n",g,rho_0);
+        fprintf(stdout,"rho_0 = %f\n",rho_0);
         fprintf(stdout,"Time between plots: %g s\n",plot_interval);
         fprintf(stdout,"Initial velocity perturbation: %g\n",perturb);
         fprintf(stdout,"Filter cutoff = %f, order = %f, strength = %f\n",f_cutoff,f_order,f_strength);
-        fprintf(stdout,"Approx. max buoyancy frequency squared: %g\n",N2_max);
         fprintf(stdout,"Max time step: %g\n",dt_max);
     }
 
