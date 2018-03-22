@@ -49,8 +49,7 @@ void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, TArrayn::DT
         bool dimensional_rho = false, bool mapped = false, Array<double,1> hill = Array<double,1>());
 // Internal energy converted to BPE
 void compute_BPE_from_internal(double & phi_i, TArrayn::DTArray & rho,
-        double kappa_rho, double rho_0, double g, int Nz,
-        bool dimensional_rho = false, bool mapped = false, TArrayn::DTArray * Hprime = NULL);
+        double kappa_rho, double rho_0, double g, int Nz, bool dimensional_rho = false);
 
 // Quadrature weights
 void compute_quadweights(int szx, int szy, int szz, 

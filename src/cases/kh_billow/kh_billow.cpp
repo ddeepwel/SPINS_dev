@@ -336,7 +336,7 @@ class userControl : public BaseCase {
                 }
 
                 // Write to file
-                if (!(restarting and (iter==0)))
+                if (!(restarting and iter==0))
                     write_diagnostics(header, line, iter, restarting);
                 // and to the log file
                 fprintf(stdout,"[%d] (%.4g) %.4f: "

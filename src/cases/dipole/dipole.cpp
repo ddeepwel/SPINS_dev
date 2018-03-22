@@ -124,7 +124,7 @@ class userControl : public BaseCase {
             } else if (restarting and restart_from_dump) {
                 init_vels_dump(u, v, w);
             } else{
-                // initial dipole (use v as the vector r^2)
+                // initial dipole
                 u = 0.5*U0 * 
                     ( (zz(kk)-Z1) * exp(-(pow(xx(ii)-X1,2) + pow(zz(kk)-Z1,2))/(r0*r0))
                      -(zz(kk)-Z2) * exp(-(pow(xx(ii)-X2,2) + pow(zz(kk)-Z2,2))/(r0*r0))
@@ -295,7 +295,7 @@ class userControl : public BaseCase {
                 }
 
                 // Write to file
-                if (!(restarting and (iter==0)))
+                if (!(restarting and iter==0))
                     write_diagnostics(header, line, iter, restarting);
                 // and to the log file
                 fprintf(stdout,"[%d] (%.4g) %.4f: "

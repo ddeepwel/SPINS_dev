@@ -334,12 +334,7 @@ class userControl : public BaseCase {
             // Conversion from internal energy to background potential energy
             double phi_i = 0;
             if (compute_internal_to_BPE) {
-                if (!is_mapped()) {
-                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz,
-                        false, is_mapped(), Hprime);
-                } else {
-                // this is not finished yet for the mapped case
-                }
+                compute_BPE_from_internal(phi_i, *tracers[RHO], kappa_rho, rho_0, g, Nz);
             }
             // viscous dissipation
             double diss_tot = 0;
@@ -428,7 +423,8 @@ class userControl : public BaseCase {
                 }
 
                 // Write to file
-                write_diagnostics(header, line, iter, restarting);
+                if (!(restarting and iter==0))
+                    write_diagnostics(header, line, iter, restarting);
                 // and to the log file
                 fprintf(stdout,"[%d] (%.4g) %.4f: "
                         "%.4g %.4g %.4g %.4g\n",
