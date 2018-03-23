@@ -423,7 +423,7 @@ class userControl : public BaseCase {
 
             // see if close to end of compute time and dump
             check_and_dump(clock_time, real_start_time, compute_time, time, avg_write_time,
-                    plot_number, u, v, w, tracers);
+                    plot_number, iter, u, v, w, tracers);
             // Change dump log file if successfully reached final time
             successful_dump(plot_number, final_time, plot_interval);
             // increase counter

@@ -364,7 +364,7 @@ void BaseCase::init_grid_restart(const std::string & component,
 
 /* Check and dump */
 void BaseCase::check_and_dump(double clock_time, double real_start_time,
-        double compute_time, double sim_time, double avg_write_time, int plot_number,
+        double compute_time, double sim_time, double avg_write_time, int plot_number, int iter,
         DTArray & u, DTArray & v, DTArray & w, vector<DTArray *> & tracer){
     if (compute_time > 0) {
         // default is to not dump variables
@@ -373,7 +373,8 @@ void BaseCase::check_and_dump(double clock_time, double real_start_time,
         // check if close to end of compute time
         if (master()) {
             double total_run_time = clock_time - real_start_time;
-            if (compute_time - total_run_time < 3*avg_write_time) {
+            double avg_clk_step = total_run_time/(iter+1); // +1 to accound for initial iter=0
+            if (compute_time - total_run_time < 5*(avg_write_time + avg_clk_step)) {
                 do_dump = 1; // true
             }
         }
