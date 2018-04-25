@@ -59,6 +59,8 @@ export CC
 export CXX
 export CFLAGS
 
+rm -fr redist_libs && git clone https://git.uwaterloo.ca/SPINS/redist_libs.git
+
 # Make, if necessary, the local include and lib directories
 if [ ! -d lib ]; then mkdir lib; fi
 if [ ! -d include ]; then mkdir include; fi
@@ -69,7 +71,7 @@ else
 	echo "Building Blitz++"
 	# Download the Blitz tarball if necessary
 	if [ ! -e "blitz_2010.tgz" ]; then
-		wget http://belize.math.uwaterloo.ca/~csubich/redist/blitz_2010.tgz
+      mv redist_libs/blitz_2010.tgz ./
 	fi
 	(tar -xzvf blitz_2010.tgz > /dev/null) || (echo "Untar of Blitz FAILED"; exit 1);
 	pushd blitz
@@ -90,14 +92,14 @@ if [ ! "$BUILD_FFTW" = "yes" ]; then
 else
 	echo "Building FFTW"
 	# Download FFTW if necessary
-	if [ ! -e "fftw-3.3.2.tar.gz" ]; then
-		wget http://belize.math.uwaterloo.ca/~csubich/redist/fftw-3.3.2.tar.gz
+	if [ ! -e "fftw-3.3.3.tar.gz" ]; then
+      mv redist_libs/fftw-3.3.3.tar.gz ./
 	fi
-	(tar -xzvf fftw-3.3.2.tar.gz > /dev/null)
+	(tar -xzvf fftw-3.3.3.tar.gz > /dev/null)
    if [ 0 -ne $? ]; then
       echo "Untar of FFTW FAILED"; exit 1
    fi
-	pushd fftw-3.3.2
+	pushd fftw-3.3.3
    # The "${FFTW_OPTIONS[@]}" syntax expands FFTW_OPTIONS as an array variable;
    # this allows for multi-word arguments like 'CFLAGS="-O3 --fast-math"' to
    # work properly as a single argument from configure's perspective.
@@ -119,13 +121,13 @@ else
 	echo "Building UMFPACK"
 	# Download UFconfig
 	if [ ! -e "UFconfig-3.4.0.tar.gz" ]; then
-		wget http://belize.math.uwaterloo.ca/~csubich/redist/UFconfig-3.4.0.tar.gz
+      mv redist_libs/UFconfig-3.4.0.tar.gz ./
 	fi
 	if [ ! -e "UMFPACK.tar.gz" ]; then
-		wget http://belize.math.uwaterloo.ca/~csubich/redist/UMFPACK.tar.gz
+      mv redist_libs/UMFPACK.tar.gz ./
 	fi
 	if [ ! -e "AMD.tar.gz" ]; then
-		wget http://belize.math.uwaterloo.ca/~csubich/redist/AMD.tar.gz
+      mv redist_libs/AMD.tar.gz ./
 	fi
 
 	# Untar the lot
@@ -182,7 +184,7 @@ if [ ! "$BUILD_BOOST" = "yes" ]; then
 else
    echo "Building libboost"
    if [ ! -e "boost_1_51_0.tar.gz" ]; then
-      wget http://belize.math.uwaterloo.ca/~csubich/redist/boost_1_51_0.tar.gz
+      mv redist_libs/boost_1_51_0.tar.gz ./
    fi
    # Untar libbost
    tar -xzvf boost_1_51_0.tar.gz > /dev/null 

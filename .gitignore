@@ -51,3 +51,6 @@ zgrid*
 
 # Exclude the system-specific make file
 src/system.mk
+
+# Exclude the redist_libs directory, which is a git repository to distribute dependency libraries
+redist_libs
