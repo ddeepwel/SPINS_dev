@@ -239,11 +239,11 @@ void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::D
     static DTArray *temp = alloc_array(Nx,Ny,Nz);
 
     // square vorticity components
-    compute_vort_x(v, w, *temp, gradient_op, grid_type);
+    compute_vort_x(*temp, v, w, gradient_op, grid_type);
     enst = pow(*temp,2);
-    compute_vort_y(u, w, *temp, gradient_op, grid_type);
+    compute_vort_y(*temp, u, w, gradient_op, grid_type);
     enst += pow(*temp,2);
-    compute_vort_z(u, v, *temp, gradient_op, grid_type);
+    compute_vort_z(*temp, u, v, gradient_op, grid_type);
     enst += pow(*temp,2);
     enst = 0.5*enst;
 }
