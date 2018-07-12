@@ -4,6 +4,7 @@
 # system-specific make variables, most notably the
 # C/C++ compiler/linker, 
 include system.mk
+include VERSION
 
 
 # Compile with debugging flags
@@ -22,6 +23,9 @@ TIMINGS?=false
 ifeq ($(strip $(MPICXX)),)
    MPICXX:=$(CXX)
 endif
+
+# Flag to pass version info to code
+VERSION:= -DMAJOR_VERSION=${MAJOR_VERSION} -DMINOR_VERSION=${MINOR_VERSION} -DPATCH_VERSION=${PATCH_VERSION}
 
 # Assemble the CFLAGS
 CFLAGS:=$(SYSTEM_CFLAGS) $(MPI_CFLAGS) $(SYSTEM_CXXFLAGS)
@@ -56,7 +60,7 @@ all: tests/test_deriv_x tests/test_write_x tests/test_esolve_x tests/test_heat_x
 
 .PHONY: clean
 clean:
-	rm -f *.o tests/*.o cases/*.o cases/*.src.? tests/*.src.? Science/*.o
+	rm -f *.o tests/*.o cases/*.o cases/*.src.? tests/*.src.? Science/*.o cases/*/*.src.? cases/*/*.o
 
 ##
 ## Short-names for source files
@@ -80,19 +84,19 @@ SCIENCE_OBJS := $(addprefix Science/,$(notdir $(SCIENCE_CPPS:.cpp=.o)))
 NSIntegrator.o: NSIntegrator.cpp NSIntegrator_impl.cc
 
 tests/test%.o: tests/test%.cpp
-	$(MPICXX) $(CFLAGS) -o $@ -c $<
+	$(MPICXX) ${VERSION} $(CFLAGS) -o $@ -c $<
 
 tests/test%.x: tests/test%.o tests/test%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
-	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cases/%.o: cases/%.cpp NSIntegrator_impl.cc NSIntegrator.hpp
-	$(MPICXX) $(CFLAGS) -o $@ -c  $<
+	$(MPICXX) ${VERSION} $(CFLAGS) -o $@ -c  $<
 
 cases/%.x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
-	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cases/%_x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
-	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 tests/test%.src.c: tests/test%.cpp CaseFileSource.c
 	echo "const char casefilesource[] = {`xxd -i < $<`, 0x00};" > $@
@@ -105,7 +109,7 @@ cases/%.src.c: cases/%.cpp CaseFileSource.c
 	cat CaseFileSource.c >> $@
 
 %.o: %.cpp	*.hpp
-	$(MPICXX) $(CFLAGS) -o $@ -c $< 
+	$(MPICXX) ${VERSION} $(CFLAGS) -o $@ -c $< 
 
 print-%  : ; @echo $* = $($*)
 
