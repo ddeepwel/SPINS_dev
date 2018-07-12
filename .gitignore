@@ -13,6 +13,7 @@
 xgrid*
 ygrid*
 zgrid*
+
 # Matlab reader files
 *reader.m
 # Numbered output files
@@ -26,7 +27,6 @@ zgrid*
 *.m~
 
 # exclude the supporting UMFPACK/UFconfig/AMD libraries
-
 /UMFPACK
 /UFconfig
 /AMD
@@ -35,7 +35,6 @@ zgrid*
 /boost_1_51_0
 
 # Also exclude blitz and fftw, if these are local to the build
-
 /blitz
 /fftw*
 
@@ -45,7 +44,6 @@ zgrid*
 *.tar
 
 # temporaries
-
 *tmp/*
 *tmp
 
@@ -54,3 +52,6 @@ src/system.mk
 
 # Exclude the redist_libs directory, which is a git repository to distribute dependency libraries
 redist_libs
+
+# Exclude src.c files
+*.src.c
