@@ -58,7 +58,7 @@ void add_switch(const char * name, bool * location, const char * description) {
 
 // Global variables for help and config file
 string config_file;
-bool help;
+bool help, version;
 
 // Function to initialize the options-categories, and include
 // highly-necessary baseline options (help and config file)
@@ -66,6 +66,7 @@ void options_init() {
    option_category("SPINS: baseline options");
    add_option("config",&config_file,string("spins.conf"),"Configuration file");
    add_switch("help",&help,"Print this set of options and exit");
+   add_switch("version",&version,"Print the version number.");
 }
 
 // Run the options parser, using the passed-in argc/argv from
@@ -177,6 +178,12 @@ void options_parse(int argc, char ** argv) {
          cerr << combined_options << endl;
       }
       MPI_Finalize(); exit(1);
+   }
+
+   if (version) {
+       // Print version information
+       if (master()) { fprintf(stdout,"\nSPINS Version %d.%d.%d \n\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION); }
+       MPI_Finalize(); exit(1);
    }
 
 }
