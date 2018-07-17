@@ -1,6 +1,4 @@
-/* WARNING: Science Content!
-
-   Collection of various analysis routines that are general enough to be useful
+   /* Collection of various analysis routines that are general enough to be useful
    over more than one project */
 
 #ifndef SCIENCE_HPP
@@ -11,6 +9,8 @@
 #include "NSIntegrator.hpp"
 
 
+// Global arrays to store quadrature weights
+extern Array<double,1> _quadw_x, _quadw_y, _quadw_z;
 
 // Marek's Overturning Diagnostic
 blitz::Array<double,3> overturning_2d(blitz::Array<double,3> const & rho, 
@@ -34,10 +34,12 @@ void compute_vort_z(TArrayn::DTArray & vortz, TArrayn::DTArray & u, TArrayn::DTA
 void compute_vorticity(TArrayn::DTArray & vortx, TArrayn::DTArray & vorty, TArrayn::DTArray & vortz,
         TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn::DTArray & w,
         TArrayn::Grad * gradient_op, const string * grid_type);
+
 // Enstrophy density
 void enstrophy_density(TArrayn::DTArray & enst, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
         const int Nx, const int Ny, const int Nz);
+
 // Viscous dissipation
 void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray & v,
         TArrayn::DTArray & w, TArrayn::Grad * gradient_op, const string * grid_type,
@@ -47,6 +49,7 @@ void dissipation(TArrayn::DTArray & diss, TArrayn::DTArray & u, TArrayn::DTArray
 void compute_Background_PE(double & BPE_tot, TArrayn::DTArray & rho, TArrayn::DTArray & quad3,
         int Nx, int Ny, int Nz, double Lx, double Ly, double Lz, double g, double rho_0, int iter,
         bool dimensional_rho = false, bool mapped = false, Array<double,1> hill = Array<double,1>());
+
 // Internal energy converted to BPE
 void compute_BPE_from_internal(double & phi_i, TArrayn::DTArray & rho,
         double kappa_rho, double rho_0, double g, int Nz, bool dimensional_rho = false);
@@ -56,12 +59,14 @@ void compute_quadweights(int szx, int szy, int szz,
       double Lx, double Ly, double Lz,
       NSIntegrator::DIMTYPE DIM_X, NSIntegrator::DIMTYPE DIM_Y,
       NSIntegrator::DIMTYPE DIM_Z);
+
 const blitz::Array<double,1> * get_quad_x();
 const blitz::Array<double,1> * get_quad_y();
 const blitz::Array<double,1> * get_quad_z();
 
 // find which expansion to use based on field and boundary conditions
 void find_expansion(const string * grid_type, Transformer::S_EXP * expan, string deriv_filename);
+
 // switch trig function
 Transformer::S_EXP swap_trig( Transformer::S_EXP the_exp );
 
@@ -69,6 +74,7 @@ Transformer::S_EXP swap_trig( Transformer::S_EXP the_exp );
 void bottom_slope(TArrayn::DTArray & Hprime, TArrayn::DTArray & zgrid,
         TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
         const string * grid_type, const int Nx, const int Ny, const int Nz);
+
 // Top stresses
 void top_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & u,
         TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
@@ -76,6 +82,7 @@ void top_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & u,
 void top_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & v,
         TArrayn::DTArray & temp, TArrayn::Grad * gradient_op,
         const string * grid_type, const int Nz, const double visco);
+
 // Bottom stresses
 void bottom_stress_x(TArrayn::DTArray & stress_x, TArrayn::DTArray & Hprime,
         TArrayn::DTArray & u, TArrayn::DTArray & w, TArrayn::DTArray & temp,
