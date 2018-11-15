@@ -65,6 +65,7 @@ namespace NSIntegrator {
 
          /* This will have to include ranges (arrays) for topography */
          double Lx, Ly, Lz; // domain lengths
+         Array<double,1> Lzs; // domain depth at each horizontal position
          double visco;
 
          Control * usercode;
@@ -141,6 +142,7 @@ namespace NSIntegrator {
             tx(user->type_x()), ty(user->type_y()), tz(user->type_z()),
             /* Lengths */
             Lx(user->length_x()), Ly(user->length_y()), Lz(user->length_z()),
+            Lzs(split_range(szx)),
             /* Viscosity */
             visco(user->get_visco()),
             /* User code */
@@ -313,6 +315,9 @@ namespace NSIntegrator {
 
                   gradient->set_jac(secondDim,secondDim,bl_y/Ly);
                      
+                  // Calculate the vertical depths
+                  blitz::Range all = blitz::Range::all();
+                  Lzs = abs(zgrid(all,0,szz-1) - zgrid(all,0,0));
                } else {
                   gradient->set_jac(firstDim,firstDim,bl_x/Lx);
                   gradient->set_jac(secondDim,secondDim,bl_y/Ly);
