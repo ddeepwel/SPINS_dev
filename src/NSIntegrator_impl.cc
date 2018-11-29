@@ -802,7 +802,11 @@ namespace NSIntegrator {
                grid dz is not a constant.  So, use two terms of a Taylor
                Series to give one */
             double pin = M_PI/(szz-1);
-            timez = (Lz/2)*min(abs((pin*sin(kk*pin)+pin*pin/2*cos(kk*pin))/(1e-8 + abs(ws[0](ii,jj,kk)))));
+            if (mapped_problem) {
+                timez = min(abs(Lzs(ii)/2 * (pin*sin(kk*pin)+pin*pin/2*cos(kk*pin))/(1e-8 + abs(ws[0](ii,jj,kk)))));
+            } else {
+                timez = min(abs(   Lz/2   * (pin*sin(kk*pin)+pin*pin/2*cos(kk*pin))/(1e-8 + abs(ws[0](ii,jj,kk)))));
+            }
          } else {
             timez = (Lz/szz) / (1e-6 + max(abs(ws[0])));
          }
