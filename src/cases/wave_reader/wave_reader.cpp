@@ -481,7 +481,7 @@ class userControl : public BaseCase {
             write_array(u,"u.dump");
             write_array(v,"v.dump");
             write_array(w,"w.dump");
-            write_array(*tracers[RHO],"rho.dump");
+            write_array(*tracers[RHO],"tracer.dump");
             if (is_tracer)
                 write_array(*tracers[TRCR],"rho.dump");
         }
