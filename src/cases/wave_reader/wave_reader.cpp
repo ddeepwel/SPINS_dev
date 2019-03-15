@@ -194,7 +194,11 @@ class userControl : public BaseCase {
                 // else start from other data formats
                 init_field("u", u_filename, u, input_data_types);
                 init_field("w", w_filename, w, input_data_types);
-                v = 0*ii + 0*jj + 0*kk;
+                if (Ny > 1 || rot_f != 0) {
+                    init_field("v", v_filename, v, input_data_types);
+                } else {
+                    v = 0*ii + 0*jj + 0*kk;
+                }
 
                 // Add a random perturbation to trigger any 3D instabilities
                 int myrank;
@@ -206,7 +210,7 @@ class userControl : public BaseCase {
                         for (int k = u.lbound(thirdDim); k <= u.ubound(thirdDim); k++) {
                             u(i,j,k) *= 1+perturb*rnd.random();
                             w(i,j,k) *= 1+perturb*rnd.random();
-                            if ( Ny > 1 || rot_f != 0)
+                            if (Ny > 1 || rot_f != 0)
                                 v(i,j,k) *= 1+perturb*rnd.random();
                         }
                     }
