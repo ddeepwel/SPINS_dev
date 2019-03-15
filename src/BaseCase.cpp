@@ -19,7 +19,11 @@ BaseCase::BaseCase(void)
     if (master()) WriteCaseFileSource();
 
     // Print version information
-    if (master()) { fprintf(stdout,"\nSPINS Version %d.%d.%d \n\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION); }
+    if (master()) {
+        fprintf(stdout,"-------------------------------------------\n");
+        fprintf(stdout,"\nSPINS Version %d.%d.%d \n\n", MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION);
+        fprintf(stdout,"-------------------------------------------\n");
+    }
 }
 
 /* Implementation of non-abstract methods in BaseCase */
@@ -234,17 +238,17 @@ void BaseCase::automatic_grid(double MinX, double MinY, double MinZ,
 
     // Write grid/reader
     grid = (*xx)(ii) + 0*jj + 0*kk;
-    write_grid(grid,"xgrid");
+    write_array(grid,"xgrid");
     write_reader(grid,"xgrid",false);
 
     if (size_y() > 1) {
         grid = 0*ii + (*yy)(jj) + 0*kk;
-        write_grid(grid,"ygrid");
+        write_array(grid,"ygrid");
         write_reader(grid,"ygrid",false);
     }
 
     grid = 0*ii + 0*jj + (*zz)(kk);
-    write_grid(grid,"zgrid");
+    write_array(grid,"zgrid");
     write_reader(grid,"zgrid",false);
 
     // Clean up

@@ -577,7 +577,19 @@ int main(int argc, char ** argv) {
         dt_max = 0.5/sqrt(N2_max);
     }
 
+    /* ------------------ Initialize --------------------- */
+
+    // Create an instance of the above class
+    userControl mycode;
+    // Create a flow-evolver that takes its settings from the above class
+    FluidEvolve<userControl> do_stuff(&mycode);
+    // Initialize
+    do_stuff.initialize();
+
     /* ------------------ Print some parameters --------------------- */
+
+    compute_start_time = MPI_Wtime(); // beginning of simulation (after reading in data)
+    double startup_time = compute_start_time - real_start_time;
 
     if (master()) {
         fprintf(stdout,"Dam break problem\n");
@@ -588,19 +600,10 @@ int main(int argc, char ** argv) {
         fprintf(stdout,"Filter cutoff = %f, order = %f, strength = %f\n",f_cutoff,f_order,f_strength);
         fprintf(stdout,"Approx. max buoyancy frequency squared: %g\n",N2_max);
         fprintf(stdout,"Max time step: %g\n",dt_max);
+        fprintf(stdout,"Start-up time: %.6g s.\n",startup_time);
     }
 
-    /* ------------------ Do stuff --------------------- */
-
-    // Create an instance of the above class
-    userControl mycode;
-    // Create a flow-evolver that takes its settings from the above class
-    FluidEvolve<userControl> do_stuff(&mycode);
-    // Initialize
-    do_stuff.initialize();
-    compute_start_time = MPI_Wtime(); // beginning of simulation (after reading in data)
-    double startup_time = compute_start_time - real_start_time;
-    if (master()) fprintf(stdout,"Start-up time: %.6g s.\n",startup_time);
+    /* ------------------ Run --------------------- */
     // Run until the end of time
     do_stuff.do_run(final_time);
     MPI_Finalize();
