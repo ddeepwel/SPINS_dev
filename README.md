@@ -6,6 +6,6 @@ A peer-reviewed article introducing SPINS by Subich, Lamb, and Stastna can be fo
 
 ## Documentation
 
-At present there is no formal documation / wiki for SPINS. 
-However, a set of installation / usage notes have been compiled at the University of Waterloo's Fluids Lab page: <https://wiki.math.uwaterloo.ca/fluidswiki/index.php?title=SPINS_User_Guide>
+At present there is no formal documation / wiki for SPINS.
+However, a set of installation / usage notes have been compiled at the University of Waterloo's Fluids Lab page: <https://wiki.math.uwaterloo.ca/fluidswiki/index.php?title=SPINS_User_Guide> and <https://wiki.math.uwaterloo.ca/fluidswiki/index.php?title=SPINS>
 
