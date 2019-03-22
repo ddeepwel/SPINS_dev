@@ -128,13 +128,13 @@ void options_parse(int argc, char ** argv) {
 
    // Now, parse the configuration file
    std::ifstream config_stream(config_file.c_str());
-   if (!help && !config_stream) {
+   if (!help && !config_stream && !version) {
       if (master()) {
          cerr << "ERROR: Configuration file " << config_file <<
             " could not be opened\n";
       }
       help = true;
-   } else if (!help) {
+   } else if (!help && !version) {
       try {
          // Gather the options from the configuration file stream
          parsed = popt::parse_config_file(
