@@ -525,35 +525,45 @@ void BaseCase::stresses_top(TArrayn::DTArray & u, TArrayn::DTArray & v, TArrayn:
 
     // top stress ( along channel - x )
     top_stress_x(*tx, u, temp, gradient_op, grid_type, size_z(), mu);
-    double top_tx_tot = pssum(sum(
+    // integral values (the first is the surface force)
+    double fx_tot = pssum(sum(
                 (*get_quad_x())(ii)*
                 (*get_quad_y())(jj)*(*tx)));
-    double top_tx_abs = pssum(sum(
+    double fx_abs = pssum(sum(
                 (*get_quad_x())(ii)*
                 (*get_quad_y())(jj)*abs(*tx)));
+    // extrema values
+    double tx_max = psmax(max(*tx));
+    double tx_min = psmin(min(*tx));
+
     // top stress ( across channel - y )
     top_stress_y(*ty, v, temp, gradient_op, grid_type, size_z(), mu);
-    double top_ty_tot = pssum(sum(
+    // integral values (the first is the surface force)
+    double fy_tot = pssum(sum(
                 (*get_quad_x())(ii)*
                 (*get_quad_y())(jj)*(*ty)));
-    double top_ty_abs = pssum(sum(
+    double fy_abs = pssum(sum(
                 (*get_quad_x())(ii)*
                 (*get_quad_y())(jj)*abs(*ty)));
-    // total top stress
-    double top_ts = pssum(sum(
-                (*get_quad_x())(ii)*
-                (*get_quad_y())(jj)*pow(pow(*tx,2)+pow(*ty,2),0.5)));
+    // extrema values
+    double ty_max = psmax(max(*ty));
+    double ty_min = psmin(min(*ty));
+    double ts_max = psmax(max(pow(pow(*tx,2)+pow(*ty,2),0.5)));
+
     // write to a stress diagnostic file
     if (master()) {
         FILE * stresses_file = fopen("stresses_top.txt","a");
         assert(stresses_file);
         if ( itercount==0 and !restarting )
             fprintf(stresses_file,"Time, "
-                    "Top_tx_tot, Top_tx_abs, Top_ty_tot, Top_ty_abs, Top_ts\n");
+                    "tx_max, tx_min, ty_max, ty_min, ts_max, "
+                    "fx_tot, fx_abs, fy_tot, fy_abs\n");
         fprintf(stresses_file,"%.17f, "
-                "%.17g, %.17g, %.17g, %.17g, %.17g\n",
+                "%.17g, %.17g, %.17g, %.17g, %.17g, "
+                "%.17g, %.17g, %.17g, %.17g\n",
                 time,
-                top_tx_tot, top_tx_abs, top_ty_tot, top_ty_abs, top_ts);
+                tx_max, tx_min, ty_max, ty_min, ts_max,
+                fx_tot, fx_abs, fy_tot, fy_abs);
         fclose(stresses_file);
     }
 }
@@ -570,24 +580,30 @@ void BaseCase::stresses_bottom(TArrayn::DTArray & u, TArrayn::DTArray & v, TArra
 
     // bottom stress ( along channel - x )
     bottom_stress_x(*tx, Hprime, u, w, temp, gradient_op, grid_type, is_mapped(), mu);
-    double bot_tx_tot = pssum(sum(
+    // integral values (the first is the surface force)
+    double fx_tot = pssum(sum(
                 (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
                 (*get_quad_y())(jj)*(*tx)));
-    double bot_tx_abs = pssum(sum(
+    double fx_abs = pssum(sum(
                 (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
                 (*get_quad_y())(jj)*abs(*tx)));
+    // extrema values
+    double tx_max = psmax(max(*tx));
+    double tx_min = psmin(min(*tx));
+
     // bottom stress ( across channel - y )
     bottom_stress_y(*ty, Hprime, v, temp, gradient_op, grid_type, is_mapped(), mu);
-    double bot_ty_tot = pssum(sum(
+    // integral values (the first is the surface force)
+    double fy_tot = pssum(sum(
                 (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
                 (*get_quad_y())(jj)*(*ty)));
-    double bot_ty_abs = pssum(sum(
+    double fy_abs = pssum(sum(
                 (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
                 (*get_quad_y())(jj)*abs(*ty)));
-    // total bottom stress
-    double bot_ts = pssum(sum(
-                (*get_quad_x())(ii)*pow(1+pow(Hprime,2),0.5)*
-                (*get_quad_y())(jj)*pow(pow(*tx,2)+pow(*ty,2),0.5)));
+    // extrema values
+    double ty_max = psmax(max(*ty));
+    double ty_min = psmin(min(*ty));
+    double ts_max = psmax(max(pow(pow(*tx,2)+pow(*ty,2),0.5)));
 
     // write to a stress diagnostic file
     if (master()) {
@@ -595,11 +611,14 @@ void BaseCase::stresses_bottom(TArrayn::DTArray & u, TArrayn::DTArray & v, TArra
         assert(stresses_file);
         if ( itercount==0 and !restarting )
             fprintf(stresses_file,"Time, "
-                    "Bottom_tx_tot, Bottom_tx_abs, Bottom_ty_tot, Bottom_ty_abs, Bottom_ts\n");
+                    "tx_max, tx_min, ty_max, ty_min, ts_max, "
+                    "fx_tot, fx_abs, fy_tot, fy_abs\n");
         fprintf(stresses_file,"%.17f, "
-                "%.17g, %.17g, %.17g, %.17g, %.17g\n",
+                "%.17g, %.17g, %.17g, %.17g, %.17g, "
+                "%.17g, %.17g, %.17g, %.17g\n",
                 time,
-                bot_tx_tot, bot_tx_abs, bot_ty_tot, bot_ty_abs, bot_ts);
+                tx_max, tx_min, ty_max, ty_min, ts_max,
+                fx_tot, fx_abs, fy_tot, fy_abs);
         fclose(stresses_file);
     }
 }
