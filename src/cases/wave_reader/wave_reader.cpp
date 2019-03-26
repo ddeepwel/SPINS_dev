@@ -167,8 +167,8 @@ class userControl : public BaseCase {
             write_reader(xg,"xgrid",false);
             write_reader(zg,"zgrid",false);
             if ( Ny > 1 ) {
-                write_array(yg,"xgrid");
-                write_reader(yg,"xgrid",false);
+                write_array(yg,"ygrid");
+                write_reader(yg,"ygrid",false);
             }
 
             // Define topography
