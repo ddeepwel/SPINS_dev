@@ -60,7 +60,7 @@ all: tests/test_deriv_x tests/test_write_x tests/test_esolve_x tests/test_heat_x
 
 .PHONY: clean
 clean:
-	rm -f *.o tests/*.o cases/*.o cases/*.src.? tests/*.src.? Science/*.o cases/*/*.src.? cases/*/*.o
+	rm -f *.o tests/*.o cases/*.o cases/*.src.? tests/*.src.? Science/*.o BaseCase/*.o cases/*/*.src.? cases/*/*.o
 
 ##
 ## Short-names for source files
@@ -86,16 +86,16 @@ NSIntegrator.o: NSIntegrator.cpp NSIntegrator_impl.cc
 tests/test%.o: tests/test%.cpp
 	$(MPICXX) ${VERSION} $(CFLAGS) -o $@ -c $<
 
-tests/test%.x: tests/test%.o tests/test%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
+tests/test%.x: tests/test%.o tests/test%.src.o ${SCIENCE_OBJS} ${BASECASE_OBJS} ${SPINS_BASE}
 	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 cases/%.o: cases/%.cpp NSIntegrator_impl.cc NSIntegrator.hpp
 	$(MPICXX) ${VERSION} $(CFLAGS) -o $@ -c  $<
 
-cases/%.x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
+cases/%.x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${BASECASE_OBJS} ${SPINS_BASE}
 	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-cases/%_x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${SPINS_BASE}
+cases/%_x: cases/%.o cases/%.src.o ${SCIENCE_OBJS} ${BASECASE_OBJS} ${SPINS_BASE}
 	$(LD) ${VERSION} $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 tests/test%.src.c: tests/test%.cpp CaseFileSource.c
