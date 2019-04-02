@@ -44,6 +44,8 @@ bool deriv_x, deriv_y, deriv_z;     // which derivatives
 bool do_vor_x, do_vor_y, do_vor_z;  // Do vorticity calculations?
 bool do_enstrophy;                  // Do Enstrophy calculation?
 bool do_dissipation;                // Do Viscous dissipation?
+bool do_vort_stretch;               // Do vortex stretching/tilting?
+bool do_enst_stretch;               // Do enstrophy production term from vortex streching/tilting?
 bool v_exist;                       // Does the v field exist?
 
 /* ------------------ Adjust the class --------------------- */
@@ -53,6 +55,7 @@ class userControl : public BaseCase {
         /* Initialize things */
         Grad * gradient_op;     // gradient operator
         DTArray deriv_var;      // array for derivative
+        DTArray *temp1, *temp2, *temp3;   // arrays for vortex stretching / enstrophy production
 
         /* Size of domain */
         double length_x() const { return Lx; }
@@ -104,6 +107,12 @@ class userControl : public BaseCase {
             //string prev_deriv, base_field;
             vector<string> fields;      // vector of fields to take derivatives
             split(deriv_filenames.c_str(), ' ', fields);    // populate that vector
+            if ( do_vort_stretch or do_enst_stretch ) {
+                temp1 = alloc_array(Nx,Ny,Nz);
+                temp2 = alloc_array(Nx,Ny,Nz);
+                if ( do_enst_stretch )
+                    temp3 = alloc_array(Nx,Ny,Nz);
+            }
 
             // Compute derivatives at each requested output
             for ( plotnum = start_sequence; plotnum <= final_sequence;
@@ -196,7 +205,8 @@ class userControl : public BaseCase {
                 }
 
                 // read in fields (if not already stored in memory)
-                if ( do_vor_x or do_vor_y or do_vor_z or do_enstrophy or do_dissipation) {
+                if ( do_vor_x or do_vor_y or do_vor_z or
+                        do_enstrophy or do_dissipation or do_vort_stretch or do_enst_stretch ) {
                     // u
                     init_tracer_restart("u",u);
                     // v
@@ -215,7 +225,7 @@ class userControl : public BaseCase {
                 }
 
                 // X-component of vorticity
-                if (do_vor_x) {
+                if ( do_vor_x ) {
                     compute_vort_x(deriv_var, v, w, gradient_op, grid_type);
                     double max_var = psmax(max(abs(deriv_var)));
                     if (master()) fprintf(stdout,"Max X-vorticity: %.6g\n",max_var);
@@ -224,7 +234,7 @@ class userControl : public BaseCase {
                         fprintf(stdout,"Completed the write for vortx.%d\n",plotnum);
                 }
                 // Y-component of vorticity
-                if (do_vor_y) {
+                if ( do_vor_y ) {
                     compute_vort_y(deriv_var, u, w, gradient_op, grid_type);
                     double max_var = psmax(max(abs(deriv_var)));
                     if (master()) fprintf(stdout,"Max Y-vorticity: %.6g\n",max_var);
@@ -233,7 +243,7 @@ class userControl : public BaseCase {
                         fprintf(stdout,"Completed the write for vorty.%d\n",plotnum);
                 }
                 // Z-component of vorticity
-                if (do_vor_z) {
+                if ( do_vor_z ) {
                     compute_vort_z(deriv_var, u, v, gradient_op, grid_type);
                     double max_var = psmax(max(abs(deriv_var)));
                     if (master()) fprintf(stdout,"Max Z-vorticity: %.6g\n",max_var);
@@ -269,6 +279,41 @@ class userControl : public BaseCase {
                     write_array(deriv_var,"diss",plotnum);
                     if (master())
                         fprintf(stdout,"Completed the write for diss.%d\n",plotnum);
+                }
+
+                // Calculate vortex stretching term
+                if ( do_vort_stretch ) {
+                    // x component
+                    vortex_stretch_x(deriv_var, u, v, w, *temp1, *temp2, gradient_op, grid_type);
+                    double max_var = psmax(max(abs(deriv_var)));
+                    if (master()) fprintf(stdout,"Max vortex stretch in x: %.6g\n",max_var);
+                    write_array(deriv_var,"vort-stretchx",plotnum);
+                    if (master())
+                        fprintf(stdout,"Completed the write for vort-stretchx.%d\n",plotnum);
+                    // y component
+                    vortex_stretch_y(deriv_var, u, v, w, *temp1, *temp2, gradient_op, grid_type);
+                    max_var = psmax(max(abs(deriv_var)));
+                    if (master()) fprintf(stdout,"Max vortex stretch in y: %.6g\n",max_var);
+                    write_array(deriv_var,"vort-stretchy",plotnum);
+                    if (master())
+                        fprintf(stdout,"Completed the write for vort-stretchy.%d\n",plotnum);
+                    // z component
+                    vortex_stretch_z(deriv_var, u, v, w, *temp1, *temp2, gradient_op, grid_type);
+                    max_var = psmax(max(abs(deriv_var)));
+                    if (master()) fprintf(stdout,"Max vortex stretch in z: %.6g\n",max_var);
+                    write_array(deriv_var,"vort-stretchz",plotnum);
+                    if (master())
+                        fprintf(stdout,"Completed the write for vort-stretchz.%d\n",plotnum);
+                }
+
+                // Calculate enstrophy production via vortex stretching/tilting
+                if ( do_enst_stretch ) {
+                    enstrophy_stretch_production(deriv_var, u, v, w, *temp1, *temp2, *temp3, gradient_op, grid_type);
+                    double max_var = psmax(max(abs(deriv_var)));
+                    if (master()) fprintf(stdout,"Max enstrophy stretch production: %.6g\n",max_var);
+                    write_array(deriv_var,"enst-stretch",plotnum);
+                    if (master())
+                        fprintf(stdout,"Completed the write for enst-stretch.%d\n",plotnum);
                 }
             }
         }
@@ -333,6 +378,8 @@ int main(int argc, char ** argv) {
     add_option("do_vor_z",&do_vor_z,false,"Do the Z-component of vorticity?");
     add_option("do_enstrophy",&do_enstrophy,false,"Calculate enstrophy?");
     add_option("do_dissipation",&do_dissipation,false,"Calculate viscous dissipation?");
+    add_option("do_vort_stretch",&do_vort_stretch,false,"Calculate vortex stretching?");
+    add_option("do_enst_stretch",&do_enst_stretch,false,"Calculate enstrophy stretching production?");
     add_option("v_exist",&v_exist,"Does the v field exist?");
 
     // Parse the options from the command line and config file

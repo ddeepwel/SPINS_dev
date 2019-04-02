@@ -93,6 +93,23 @@ void bottom_stress_y(TArrayn::DTArray & stress_y, TArrayn::DTArray & Hprime,
         TArrayn::Grad * gradient_op, const string * grid_type, const bool mapped,
         const double visco);
 
+// Vortex stretching/tilting
+void vortex_stretch_x(TArrayn::DTArray & vort_stretch, TArrayn::DTArray & u,
+        TArrayn::DTArray & v, TArrayn::DTArray & w, TArrayn::DTArray & temp1,
+        TArrayn::DTArray & temp2, TArrayn::Grad * gradient_op, const string * grid_type);
+void vortex_stretch_y(TArrayn::DTArray & vort_stretch, TArrayn::DTArray & u,
+        TArrayn::DTArray & v, TArrayn::DTArray & w, TArrayn::DTArray & temp1,
+        TArrayn::DTArray & temp2, TArrayn::Grad * gradient_op, const string * grid_type);
+void vortex_stretch_z(TArrayn::DTArray & vort_stretch, TArrayn::DTArray & u,
+        TArrayn::DTArray & v, TArrayn::DTArray & w, TArrayn::DTArray & temp1,
+        TArrayn::DTArray & temp2, TArrayn::Grad * gradient_op, const string * grid_type);
+
+// Enstrophy production via vortex stretching/tilting
+void enstrophy_stretch_production(TArrayn::DTArray & enst_prod, TArrayn::DTArray & u,
+        TArrayn::DTArray & v, TArrayn::DTArray & w, TArrayn::DTArray & temp1,
+        TArrayn::DTArray & temp2, TArrayn::DTArray & temp3, TArrayn::Grad * gradient_op,
+        const string * grid_type);
+
 // Equation of state for seawater, polynomial fit from
 // Brydon, Sun, Bleck (1999) (JGR)
 
