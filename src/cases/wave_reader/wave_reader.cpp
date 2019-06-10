@@ -172,7 +172,9 @@ class userControl : public BaseCase {
             }
 
             // Define topography
-            topo = zg(all,0,0);
+            // and shift it to match the adjustment made in the PE calculation
+            // This is also necessary to adjust the voxel sizes properly
+            topo = zg(all,0,0) - MinZ;
         }
 
         /* Initialize velocities */
