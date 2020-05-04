@@ -677,6 +677,8 @@ void Cheb_2dmg::set_bc(double h, double zdir, double zneum, S_EXP sym_type, doub
    dir_xbc = xdir;
    if (h == 0 && dir_xbc == 0 && dir_zbc == 0 && type_x != SINE) {
       indefinite_problem = true;
+   } else {
+      indefinite_problem = false;
    }
 
    // propagate the changes to the multigrid preconditioner.
@@ -1041,8 +1043,8 @@ int poisson_2d(TArrayn::DTArray & resid, TArrayn::DTArray & soln,
    static int cszx = 0; static int cszz = 0;
    static MPI_Comm comm = MPI_COMM_WORLD;
    static double warn_level = 1e-5;
-   //int inn_its = 20, out_its = 2;
-   int inn_its = 10, out_its = 3;
+   int inn_its = 40, out_its = 2;
+   //int inn_its = 10, out_its = 3;
 
    if (xbc_a == 0 && xbc_b == 0) {
       xbc_a = zbc_a;
@@ -1083,7 +1085,7 @@ int poisson_2d(TArrayn::DTArray & resid, TArrayn::DTArray & soln,
    if (solver->noisy()) {
       fprintf(stderr,"Solving 2DMG problem (%g:%f-%f+%f-%f) with GMRES(%d,%d)\n",helmholtz,zbc_a,zbc_b,xbc_a,xbc_b,inn_its,out_its);
    }
-   int itc = gmresser->Solve(lhs,rhs,1e-6,inn_its,out_its,&final_error);
+   int itc = gmresser->Solve(lhs,rhs,1e-5,inn_its,out_its,&final_error);
    if (solver->noisy()) {
       fprintf(stderr,"Solve: %d its, %g error, %g sigma\n",itc,final_error,lhs->sigma);
    }
