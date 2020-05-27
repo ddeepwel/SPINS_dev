@@ -174,7 +174,9 @@ class userControl : public BaseCase {
             // Define topography
             // and shift it to match the adjustment made in the PE calculation
             // This is also necessary to adjust the voxel sizes properly
-            topo = zg(all,0,0) - MinZ;
+            for (int i = topo.lbound(firstDim); i <= topo.ubound(firstDim); i++) {
+               topo(i) = min(zg(i,0,all)) - MinZ;
+            }
         }
 
         /* Initialize velocities */
