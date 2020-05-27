@@ -186,14 +186,7 @@ class userControl : public BaseCase {
             } else if (restarting and restart_from_dump) {
                 init_vels_dump(u, v, w);
             } else {
-                // error check
-                if (input_data_types == FULL) {
-                    if (master())
-                        fprintf(stderr,"FULL option chosen, turn restart on\n");
-                    MPI_Finalize(); exit(1);
-                }
-
-                // else start from other data formats
+                // FULL types can be passed directly to init_field
                 init_field("u", u_filename, u, input_data_types);
                 init_field("w", w_filename, w, input_data_types);
                 if (Ny > 1 || rot_f != 0) {
@@ -244,14 +237,7 @@ class userControl : public BaseCase {
                 if (is_tracer)
                     init_tracer_dump("tracer",*tracers[TRCR]);
             } else {
-                // error check
-                if (input_data_types == FULL) {
-                    if (master())
-                        fprintf(stderr,"FULL option chosen, turn restart on\n");
-                    MPI_Finalize(); exit(1);
-                }
-
-                // else start from other data formats
+                // init_field can handle all input types
                 init_field("rho", rho_filename, *tracers[RHO], input_data_types);
                 if (is_tracer)
                     init_field("tracer", tracer_filename, *tracers[TRCR], input_data_types);
