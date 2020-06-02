@@ -561,7 +561,7 @@ int main(int argc, char ** argv) {
     option_category("Second tracer");
     add_switch("enable_tracer",&is_tracer,"Enable evolution of a second tracer");
     add_option("tracer_kappa",&kappa_trc,"Diffusivity of tracer");
-    add_option("tracer_gravity",&tracer_g,9.81,"Gravity for the second tracer");
+    add_option("tracer_gravity",&tracer_g,0.0,"Gravity for the second tracer");
 
     option_category("Temporal options");
     add_option("final_time",&final_time,"Final time");
